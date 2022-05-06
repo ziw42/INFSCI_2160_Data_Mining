@@ -1,0 +1,107 @@
+---
+title: "Homework 01"
+author: "Wang, Zian (email: ziw42@pitt.edu)"
+date: 09/11/2021
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+# Overview
+
+> In this assignment, You'll learn how to do homework using [RMarkdown](http://rmarkdown.rstudio.com) and Git repository. Follow the submission guideline ([How to submit homework](https://yurulin.github.io/class-data-mining/assignment/homework_instruction.html)) to submit the html-preview link of your homework.
+
+Play with the Class01-Example-1 data. Create RMarkdown report using this template. Read and answer each question carefully. The grading rubric is provided below.
+
+1. Install necessary packages (e.g., `ggplot2`, `nutshell`). Load and print the dimension of data `births2006.smpl`. (**Note:** If a package is not available from the official repository, you can install the package from the archived source. See the template RMarkdown note for a hint in the code block about how to install the package from its archived source.)
+2. What is the most popular day of the week for babies being born? Generate a histogram plot to show the number of total instances over the days of week (put `frequency` on the y-axis and `day of week` on the x-axis). Use `facet_grid` in `ggplot` to break down the frequencies according to the three delivery methods. 
+    + In the data, column `DOB_WK` is the day of week, and `DMETH_REC` is the delivery method.
+3. Are triplets more likely to weigh less than singleton and twins? Generate the density plot of baby weights for singletons, twins and triplets to compare the weight distributions across the three conditions. Plot the three density curves in one figure, and use three colors to differentiate the density curves. 
+    + In the data, `DPLURAL` is the multiple-birth status.
+
+```{r document_setup, echo=F, message=F, warning=F}
+# This chunk can include things you need for the rest of the document
+library('ggplot2') ## most of the time you will need ggplot
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# 1. Load and print the dimension of birth data (`births2006.smpl`)
+**Grading note (10%):** need to load and print the dimension (5%), and explicitly answer the dimension of the dataset (5%)
+
+
+```{r}
+require(nutshell) # you will need to install this package
+## install the package from the archive source
+# install.packages('https://cran.r-project.org/src/contrib/Archive/nutshell/nutshell_1.02.tar.gz',repo=NULL, type="source")
+
+data(births2006.smpl) ## Load the data
+dim_of_data <- dim(births2006.smpl) ##Extact the dimension of the data and print it
+dim_of_data
+```
+
+YOUR ANSWER for Problem 1.
+
+As we can see, there are 427323 rows and 13 columns in the dataset. So the dimension is 427323*13.
+
+# 2. Histogram plots for number of total/C-section/Vaginal instances over the days of week
+**Grading note (40%):** need to generate two plots as requested (30%) and explicitly answer the question (What is the most popular day of the week for babies being born?) (10%)
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+births2006_1 <- births2006.smpl %>%
+  mutate(DOB_Wk = as.factor(DOB_WK))
+##All instances over the days of week.
+ggplot(data = births2006_1) +
+  geom_histogram(mapping = aes(x = DOB_WK), stat = "count", color = "gold", fill = "navyblue") +
+  theme_bw()
+
+##C-section, Vaginal and unknown instances over the days of week.
+ggplot(data = births2006_1) +
+  geom_histogram(mapping = aes(x = DOB_WK), stat = "count", color = "gold", fill = "navyblue") +
+  facet_grid( ~ DMETH_REC) +
+  theme_bw()
+
+##Check the numbers.
+(births2006.smpl %>% filter(DMETH_REC == "C-section"))$DOB_WK %>% as.factor() %>% summary()
+##Check the numbers.
+(births2006.smpl %>% filter(DMETH_REC == "Vaginal"))$DOB_WK %>% as.factor() %>% summary()
+##Check the numbers.
+(births2006.smpl %>% filter(DMETH_REC == "Unknown"))$DOB_WK %>% as.factor() %>% summary()
+```
+
+YOUR ANSWER for Problem 2.
+
+For all of the instances, the most popular day of the week for babies being born is Thursday. 
+
+For different delivery methods, the difference between the heights of some bars in the plots are very close, so it is better to check the numbers. We can see from the combination of the plots and the numbers that the most popular day is Saturday for the C-section. Also, for Vaginal, the most popular day is Friday, and for the other unknown methods, the most popular day is Saturday.
+
+# 3. Density plot of baby weights in singletons, twins and triplets
+**Grading note (50%):** need to filter the right categories, and generate a plot (with only three categories) (40%); need to explicitly answer the question (Are triplets more likely to weigh less than singleton and twins?) with reasoning (could be based on density plot or hypothesis testing) (10%)
+
+```{r}
+births2006_2 <- births2006.smpl %>%
+  filter(DPLURAL == c("1 Single", "2 Twin", "3 Triplet"))
+
+ggplot(data = births2006_2) +
+  geom_density(mapping = aes(x = DBWT, color = DPLURAL)) +
+  theme_bw()
+```
+
+YOUR ANSWER for Problem 3.
+
+In my opinion, triplets are more likely to weigh less than singleton and twins. We can see from the density plot that these three birth status' distributions are all like Gaussian distribution, and the mean of Triplets is obviously less than the means of Twin and Single babies. Also, we can see the standard deviations of these three distributions are very close. Therefore, it is more likely for Triplets that weigh less than Twins and Singleton.
+
+If we want some numbers to prove, we can see from the plot that the mean of Triplet is about 1800 grams, and the means of Twin and Singleton are about 2500 grams and 3200 grams. Therefore, we can see that there are nearly no Triplets weighing more than 4000 grams, but some Singletons weigh more than 4000. Also, we can see that about half of the Twins weigh more than 2500 grams, but only a small proportion of Triplets weigh more than 2500 grams.

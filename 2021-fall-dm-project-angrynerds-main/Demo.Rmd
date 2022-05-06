@@ -1,0 +1,303 @@
+---
+title: "Demo"
+author: "Zian Wang"
+date: "2021/12/1"
+output: html_document
+---
+```{r, warning=FALSE}
+library('foreign') ## for loading dta files using read.dta
+library('ggplot2')
+library("plyr") # for recoding data
+library("stats")
+library("cluster") ## for h-clustring
+library("dplyr") ## for making the data frames
+library("knitr") ## for make the table in 2-4
+library("RTextTools")
+library("stringdist")
+
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+
+Read the files:
+
+```{r, warning=TRUE}
+##setwd("A:/Data_Mining/2021-fall-dm-project-angrynerds")
+Sys.setlocale(category = "LC_ALL", locale = "us")
+readFile <- function(filename, num) {
+  text <- c()
+  labels <- c()
+  con <- file(filename, "r")
+  line = readLines(con, n=1)
+  while(length(line) != 0) {
+    
+    line <- gsub("\\t", "", line)
+    line <- gsub("\\n", "", line)
+    if(nchar(line) >= 60 && nchar(line) <= 500) {
+      text <- c(text, line)
+    }
+    line <- readLines(con, n=1)
+  }
+  close(con)
+  return(text)
+}
+
+text <- c()
+for(i in list.files("./data")) {
+  text <- c(text, readFile(paste("./data/", i, sep = "")))
+}
+```
+
+Manually set the labels.
+
+This is not neccessary for now because we have Sonal's great code, so you do not need to run this.
+
+```{r}
+
+label <- rep("Not problematic", length(text))
+label[1:200] <- "Erases misconduct records"
+label[238] <- "Erases misconduct records"
+label[250] <- "Gives officers unfair access to information"
+label[266] <- "Gives officers unfair access to information"
+label[257] <- "Restricts/Delays Interrogations"
+label[258] <- "Restricts/Delays Interrogations"
+label[261] <- "Restricts/Delays Interrogations"
+label[262] <- "Restricts/Delays Interrogations"
+label[267:272] <- "Limits Oversight / Discipline"
+label[284] <- "Gives officers unfair access to information"
+label[318] <- "Requires City Pay for Misconduct"
+
+text_2 <- readFile("./data/Florida+PBR.txt")
+```
+
+This trunk can automatically get the labels.
+
+```{r}
+### We should not need to run this everytime.
+truth <- read.csv("./data.csv", header = T)
+truth <- truth[c("language", "category")]
+
+label <- rep("Not problematic", length(text))
+
+for (i in seq_along(text)) {
+  for (j in seq_along(truth$language)){
+    if (stringsim(text[i], truth$language[j],method='jw', p=0.1) > 0.8){
+      label[i] = truth$category[j]
+    }
+  }
+}
+```
+
+Handel with the highly unbalanced data.
+
+```{r}
+### Read the data stored in files. If you do not have these files, do not run.
+label <- readRDS("./label.rds")
+text <- readRDS("./text.rds")
+set.seed(123)
+
+sub_text <- cbind(text, as.factor(label))
+colnames(sub_text) <- c("Text", "Label")
+sub_text <- as.data.frame(sub_text)
+sub_text <- arrange(sub_text,Label)
+summary(as.factor(sub_text$Label))
+
+
+
+over_sampling <- function(sub_text, index, times) {
+  temp <- data.frame()
+  i <- 0
+  while(i < times) {
+    temp <- rbind(temp, sub_text[min(index): max(index),])
+    i = i+1
+  }
+  return(temp)
+}
+
+under_sampling <- function(index, times) {
+  temp_label <- sample(min(index):max(index), floor(length(index) * times))
+  return(sub_text[temp_label,])
+}
+
+test_data <- data.frame()
+
+get_test <- function(index, proportion) {
+  test_index <- sample(index, proportion * length(index))
+  return(test_index)
+}
+
+times <- 50
+proportion <- 0.2
+
+prepare_data <- function(sub_text, times, proportion) {
+  t <- 1
+  test_data <- data.frame()
+  problematic_data <- data.frame()
+  while(t < 5) {
+    label <- which(sub_text$Label==t)
+    test_index <- get_test(label, proportion)
+    test_data <- rbind(test_data, sub_text[test_index,])
+    sub_text <- sub_text[-test_index,]
+    label <- which(sub_text$Label==t)
+    temp <- over_sampling(sub_text, label, times)
+    print(nrow(temp))
+    problematic_data <- rbind(problematic_data, temp)
+    t = t+1
+  }
+  label_5 <- which(sub_text$Label==5)
+  test_index <- get_test(label_5, proportion)
+  test_data <- rbind(test_data, sub_text[test_index,])
+  sub_text <- sub_text[-test_index,]
+  t <- 6
+  while(t <= 7) {
+    label <- which(sub_text$Label==t)
+    test_index <- get_test(label, proportion)
+    test_data <- rbind(test_data, sub_text[test_index,])
+    sub_text <- sub_text[-test_index,]
+    label <- which(sub_text$Label==t)
+    temp <- over_sampling(sub_text, label, times)
+    problematic_data <- rbind(problematic_data, temp)
+    t = t+1
+  }
+  non_problematic_data <- sub_text %>% filter(Label == 5)
+  sub_text <- rbind(problematic_data, non_problematic_data)
+  sub_text <- sub_text[sample(nrow(sub_text)),]
+  sub_text <- rbind(test_data, sub_text)
+  sign <- data.frame()
+  sign[1,1] <- "length of test_data is"
+  sign[1,2] <- nrow(test_data)
+  colnames(sign) <- c("Text", "Label")
+  sub_text <- rbind(sub_text, sign)
+}
+sub_text <- prepare_data(sub_text, times, proportion)
+```
+
+The function that can assign the indexes of training data and test data.
+
+```{r}
+### Input: The start and end indexes of the testing data, the rest data will be used to train. If mode=train, the output will be the indexes of training data, if mode=test, the output will be the indexes of test data.
+
+assign_indexes <- function(start, end, mode){
+  if(mode == "train") {
+    return(c(1:(start-1), (end+1):nrow(sub_text)))
+  }
+  else {
+    return(c(start: end))
+  }
+}
+```
+
+Build the matrix and the container:
+
+```{r}
+length_of_test <- as.numeric(sub_text[nrow(sub_text),"Label"])
+length_of_test <- as.integer(length_of_test)
+sub_text <- sub_text[-nrow(sub_text),]
+doc_matrix <- create_matrix(sub_text$Text, language="english", removeNumbers=TRUE,
+stemWords=TRUE, removePunctuation = TRUE, removeSparseTerms = .998)
+
+container <- create_container(doc_matrix, sub_text$Label, trainSize=4382:nrow(sub_text), testSize=1:4381, virgin=FALSE)
+
+container <- create_container(doc_matrix, sub_text$Label[1:nrow(sub_text)], trainSize=(length_of_test+1):nrow(sub_text), testSize=1:length_of_test, virgin=FALSE)
+
+saveRDS(sub_text, "sub_text_final.rds")
+saveRDS(container, "container_final.rds")
+```
+
+Training models
+
+Warning: for now we cannot train all the models at once, it seems the memory will overflow. So try training one model at a time.
+
+```{r}
+SVM <- train_model(container,"SVM")
+SLDA <- train_model(container,"SLDA")
+BOOSTING <- train_model(container,"BOOSTING")
+##doc_matrix <- readRDS("doc_matrix.rds")
+##container <- readRDS("container3.rds")
+BAGGING <- train_model(container,"BAGGING")
+RF <- train_model(container,"RF")
+NNET <- train_model(container,"NNET")
+TREE <- train_model(container,"TREE")
+
+saveRDS(SLDA, "./SLDA_FINAL.rds")
+saveRDS(SVM, "./SVM2.rds")
+saveRDS(BOOSTING, "./BOOSTING2.rds")
+saveRDS(BAGGING, "./BAGGING2.rds")
+saveRDS(container, "./container3.rds")
+```
+
+```{r}
+SLDA <- readRDS("./SLDA_FINAL.rds")
+SVM <- readRDS("./SVM_FINAL.rds")
+BOOSTING <- readRDS("./BOOSTING_FINAL.rds")
+RF <- readRDS("./RF_FINAL.rds")
+NNET <- readRDS("./NNET_FINAL.rds")
+TREE <- readRDS("./TREE_FINAL.rds")
+
+SLDA_CLASSIFY <- classify_model(container, SLDA)
+SVM_CLASSIFY <- classify_model(container, SVM)
+BOOSTING_CLASSIFY <- classify_model(container, BOOSTING)
+BAGGING_CLASSIFY <- classify_model(container, BAGGING)
+RF_CLASSIFY <- classify_model(container, RF)
+NNET_CLASSIFY <- classify_model(container, NNET)
+TREE_CLASSIFY <- classify_model(container, TREE)
+
+
+
+analytics <- create_analytics(container,
+cbind(SVM_CLASSIFY, SLDA_CLASSIFY,
+BOOSTING_CLASSIFY, BAGGING_CLASSIFY,RF_CLASSIFY, 
+NNET_CLASSIFY, TREE_CLASSIFY))
+
+analytics <- create_analytics(container,
+cbind(BAGGING_CLASSIFY))
+
+summary(analytics)
+topic_summary <- analytics@label_summary
+alg_summary <- analytics@algorithm_summary
+ens_summary <-analytics@ensemble_summary
+doc_summary <- analytics@document_summary
+
+saveRDS(analytics, "NO_OVER_SAMPLING_ANALYTICS.rds")
+```
+
+```{r}
+SVM <- readRDS("./SVM2.rds")
+SLDA <- readRDS("./SLDA2.rds")
+BOOSTING <- readRDS("./BOOSTING2.rds")
+BAGGING <- readRDS("./BAGGING2.rds")
+NNET <- readRDS("./NNET2.rds")
+TREE <- readRDS("./TREE2.rds")
+```
+
+Save everything, make sure you save the right things.
+
+```{r}
+saveRDS(sub_text, "subtext.rds")
+saveRDS(container, "container2.rds")
+
+saveRDS(text, "text.rds")
+saveRDS(label, "label.rds")
+
+saveRDS(SLDA, "SLDA.rds")
+saveRDS(SVM, "SVM.rds")
+saveRDS(BOOSTING, "BOOSTING.rds")
+saveRDS(BAGGING, "BAGGING.rds")
+saveRDS(NF, "NF.rds")
+saveRDS(NNET, "NNET.rds")
+saveRDS(TREE, "TREE.rds")
+```
+
+```{r}
+SLDA <- readRDS("./SLDA.rds")
+SVM <- readRDS("./SVM.rds")
+BOOSTING <- readRDS("./BOOSTING.rds")
+sub_text <- readRDS("./subtext.rds")
+```

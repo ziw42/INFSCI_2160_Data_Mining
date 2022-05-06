@@ -1,0 +1,502 @@
+---
+title: "Homework 02"
+author: "Wang, Zian (email: ziw42@pitt.edu)"
+date: 09/24/2021
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+# Overview
+
+> In this assignment, you'll explore both numeric and categorical variables and do regression analysis.
+
+You will use the dataset "Student Performance: Math course" for this assignment (the data is `student-mat.csv` and description could be found [here](http://archive.ics.uci.edu/ml/datasets/Student+Performance). The objective is to explain the final grade (G3) in Math course in terms of the provided attributes. Create RMarkdown report using this template.
+
+1. Read the data description. Check if there is missing value. Identify and report response variable and predictors (also called explanatory variables or features). Report the numerical variables and categorical variables in the dataset.
+
+2. Explore the dataset, and generate both statistical and graphical summary. To simplify the task, only consider the following 10 variables in this exploration: `age`, `address`, `Pstatus`, `activities`, `higher`, `internet`, `absences`, `G1`, `G2`, `G3`.
+    a. Generate a summary table for the numerical variables. For each one, list: variable name, mean, median, 1st quartile, 3rd quartile, and standard deviation.
+    b. For numerical variables, plot the density distribution. Describe whether the variable has a normal distribution or certain type of skew distribution.
+    c. For each numerical predictor, describe its relationship with the response variable through correlation and scatterplot.
+    d. For each categorical predictor, generate their conditional density plot of response variable. **Hint**: Plot the density of response variable into multiple distributions separated by the predictor’s categories, on the same figure. Use different colors or line shapes to differentiate categories. Make sure to use the proper variable "type" for the categorical variables before plotting.
+    e. (extra points) Compare and describe whether the response variable is significantly different for students with and without extra-curricular activities.
+3. Apply regression analysis on the data. Evaluate the model as well as the impact of different predictors.
+    a. Use all predictors in a standard linear regression model to predict the response variable. Report the model performance using R2, adjusted R2 and RMSE. Interpret the regression result.
+    b. Compare the standard linear regression models with three different set of predictors (as below). Evaluate which model performs better using out-of-sample RMSE. **Hint**: Implement leave-one-out cross-validation for out-of-sample evaluation.
+        + (Set A) `school`, `sex`, `age`, `address`, `Pstatus`, `Medu`, `Fedu`, `Mjob`, `Fjob`, `traveltime`, `studytime`, `failures`, `absences`, `G1`, `G2`.
+        + (Set B) `school`, `sex`, `age`, `studytime`, `failures`, `absences`, `G1`, `G2`.
+        + (Set C) `school`, `sex`, `age`, `address`, `Pstatus`, `Medu`, `Fedu`, `Mjob`, `Fjob`, `traveltime`, `G1`, `G2`.
+    c. Use non-linear regression models with the above three sets of predictors. Evaluate which model performs better using out-of-sample RMSE. **Hint**: Use poly, locfitor other appropriate packages for non-linear regression models. At least one of the predictors should have non-linear relationship with the response variable in a non-linear model.
+    d. From the previous answers,identify your best model, and identify the most important predictor in the model. Explain how you determine the importance of the predictors.
+        
+
+
+```{r document_setup, echo=F, message=F, warning=F}
+# This chunk can include things you need for the rest of the document
+library('ggplot2') ## most of the time you will need ggplot
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+library('dplyr')
+library('BSDA')   ### BSDA is used to do Z-test later.
+library('glmnet') ### glmnet is used for train non-linear models later.
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# Problem 1: Identify missing values and different variables
+
+```{r}
+## read the data
+data <- read.csv("./student-mat.csv", header = TRUE, sep = ';')
+
+## We will see is there any missing values in the data frame.
+numOfNA <- data %>% is.na() %>% which() %>% length()
+cat("There are", numOfNA, "missing values.")
+```
+
+YOUR ANSWER for Problem 1.
+
+We can see from the result of the code chunk that there is no missing value.
+
+We can know from the data description that the response variable is **G3**. The rest 32 variables are predictors.
+
+Also we can see from the data description that **age**, **absences**, **G1**, **G2**, and **G3** are five continuous variables. The other variables are all categorical variables.
+
+
+# Problem 2. Data exploration: statistical and graphical summary
+
+### a. 
+
+```{r}
+### Firstly we select needed variables.
+data <- data %>% select(c("age", "address","Pstatus", "activities", "higher", "internet", "absences", "G1", "G2", "G3"))
+
+### a. Generate a summary table for the numerical variables.
+numerical_data <- data %>% select(c("age", "absences", "G1", "G2", "G3"))
+numerical_summary <- summary(numerical_data)
+### --------- calculate the standard deviation of each numerical variables,
+### --------- and add them to the summary
+numerical_summary <- numerical_summary %>% rbind(c(
+  paste("SD     :", round(sd(numerical_data$age), 1), sep = ""),
+  paste("SD     :", round(sd(numerical_data$absences), 3), sep = ""),
+  paste("SD     :", round(sd(numerical_data$G1), 2), sep = ""),
+  paste("SD     :", round(sd(numerical_data$G2), 2), sep = ""),
+  paste("SD     :", round(sd(numerical_data$G3), 2), sep = "")
+))
+### --------- output the completed summary 
+numerical_summary
+```
+
+
+We can see the summary and standard deviation of the numerical variables from the output.
+
+## b. 
+
+We plot the density distributions of the numerical variables. We will analyze them one by one. 
+
+```{r}
+### b. For numerical variables, plot the density distribution.
+
+### --------- Density distribution of age.
+numerical_data %>% ggplot(mapping = aes(x = age)) +
+  geom_density(color = "gold", fill = "navyblue")
+
+### --------- Histogram plot
+numerical_data %>% ggplot(mapping = aes(x = age)) +
+  geom_histogram(color = "gold", fill = "navyblue")
+```
+      
+Firstly we will see the plot of age. At the first glance, we can find that the density plot of age is weird. It has some depressions. This is because actually, we do not show the age as decimal, they are all integers, which makes the plot seems weird. Therefore, we should make a histogram to see the real distribution of age.
+
+Now we see the histogram of age's distribution. It seems the distribution of age is a normal distribution. We can see the shape of the distribution, which is like a normal distribution whose mean is about 16. However, we can find that the left part of the distribution is missing because this school does not have students whose age is under 15. For the rest part, in my opinion, it is a normal distribution.
+
+```{r}
+### --------- Density distribution of absences.
+numerical_data %>% ggplot(mapping = aes(x = absences)) +
+  geom_density(color = "gold", fill = "navyblue")
+```
+
+From the plot of absences, we can see that this distribution is similar to the normal distributions. However, I do not think it is a normal distribution. This is because we can see that after the mean, the density decreases rapidly, which means if this is a normal distribution, the standard deviation should be very little. However, the density decreases for a while before reaching 0, which contradicts the small standard deviation. In other words, this distribution begins dropping from the mean quickly but takes so much time to reach 0, which is not like a normal distribution. Therefore, in my opinion, this is not a normal distribution.
+
+In my opinion, this is a right-skewed normal-like distribution.
+
+```{r}
+### --------- Density distribution of G1.
+numerical_data %>% ggplot(mapping = aes(x = G1)) +
+  geom_density(color = "gold", fill = "navyblue")
+
+### --------- Histogram plot
+numerical_data %>% ggplot(mapping = aes(x = G1)) +
+  geom_histogram(color = "gold", fill = "navyblue")
+```
+
+From the G1, the density plot is also strange. It seems in the left part near 7 and the right part near 13, there are two little bumps on the distribution, which make it not like the normal distribution. Because values of G1 are also all integers, so we will make a histogram to see the distribution of G1 too, which can make us see it more clear.
+
+In the histogram we can see that there is obviously more 7 and 8 in the dataset than 9, which will not appear in normal distribution. Also we can see that between 10 and 14, the distribution drops quickly near 10, but slowly near 12 and 13, which also does not seem like a normal distribution. Therefore, for these reasons, I think the distribution of G1 is not a normal distribution. It skewed to 7 and 8, also skewed a little to 13 an 14.
+
+```{r}
+### --------- Density distribution of G2.
+numerical_data %>% ggplot(mapping = aes(x = G2)) +
+  geom_density(color = "gold", fill = "navyblue")
+
+### --------- Histogram plot
+numerical_data %>% ggplot(mapping = aes(x = G2)) +
+  geom_histogram(color = "gold", fill = "navyblue")
+
+```
+
+For G2, it is obviously not a normal distribution. The mean is around 10, but we can see in the part right of the mean, the average density is higher than that in the left part. Also, the density when x=0 is much higher than what it should be in the normal distribution. Although we do not need a histogram to say that this distribution is not a normal distribution, we will make one to see what happened near x=0. We can see from the histogram that the only value exists around 0 in G2 is 0 itself, no G2 equals to 1 or 2.
+
+In my opinion, this is a right-skewed normal distribution with some 0 values. The 0 values here are far from the mean, which means they should not appear if this is a normal distribution.
+
+```{r}
+### --------- Density distribution of G3.
+numerical_data %>% ggplot(mapping = aes(x = G3)) +
+  geom_density(color = "gold", fill = "navyblue")
+```
+
+For G3, we  can see the density plot is similar to the density plot of G2. It is also like a right-skewed normal distribution with some x equal to 0. The similarity of the plots is because in the data description we can know that G3 is the final grade which has a strong relationship with with G1 and G2. An interesting point we can see is that the plot of G3 is more like the plot of G2, not G1. We will analyze why is this later in c.
+
+## c.
+
+```{r}
+### c. For each numerical predictor, describe its relationship with the response variable.
+
+### --------- Calculate the correlations between numerical variables and the response variable.
+
+cat("The correlation between age and G3 is:", cor(numerical_data$age, numerical_data$G3))
+
+cat("The correlation between abesences and G3 is:",cor(numerical_data$absences, numerical_data$G3))
+
+cat("The correlation between G1 and G3 is:",cor(numerical_data$G1, numerical_data$G3))
+
+cat("The correlation between G2 and G3 is:",cor(numerical_data$G2, numerical_data$G3))
+
+```
+
+Firstly, we check the correlation values. G3 has a negative correlation coefficient with age, which is -0.1615794. This means when age increases, G3 is likely to decrease. The correlation coefficient between G3 and absences is 0.03424732. Both of these correlation coefficients' absolute value is small, which means G3 has weak relationship with age and absences. For G1 and G2, we can see that the correlation coefficients between G3 and them are 0.8014679 and 0.904868. This means G3 has strong relationship with G1 and G2, and because 0.8014679<0.904868, the relationship between G3 and G2 is stronger than that between G3 and G1.
+
+In question 2b, we find the density plot of G3 is more like that of G2. I think this is not only because G3 has more strong relationship with G2. Also, another reason is G1's density distributions is similar to the part where x>3 in G2's plot. Why we think G1 and G2's plots are quite different is because G2's plot has one different bump where x is between 0 and 3. This bump also shown in G3's plot, which makes us feel that plot is also quite different with G1's. However, we can see that when x>3 in these three plots, G1's is also similar to G2's and G3's. Therefore, G3's plot is like a combination of G1's and G2's.
+
+```{r}
+### --------- Plot the scatterplot of numerical variables and the response variable. 
+
+numerical_data %>% ggplot(mapping = aes(x = age, y = G3)) +
+  geom_point(color = "navyblue")
+
+numerical_data %>% ggplot(mapping = aes(x = absences, y = G3)) +
+  geom_point(color = "navyblue")
+
+numerical_data %>% ggplot(mapping = aes(x = G1, y = G3)) +
+  geom_point(color = "navyblue") +
+  geom_smooth()
+
+numerical_data %>% ggplot(mapping = aes(x = G2, y = G3)) +
+  geom_point(color = "navyblue") +
+  geom_smooth()
+
+```
+
+Now we look at the scatter plots. We cannot find obvious trends in the plot of age and G3, or the plot of absences and G3. This is because G3 and them are not strongly correlated. We then look at the plots of G1 and G3, and the plot of G2 and G3. We can find positive trend in the plots. We can then add geom_smooth in these two plots. R language automatically add a line to each plot. From the line, we can see the positive trend more clearly. One thing needed to be noticed is besides the trend line, there's also some points lay on x-axis. These points indicate that when G3 equals to 0, G1 and G2 could be several positive values, which is not as same as the relationship we saw.
+
+## d.
+
+```{r}
+### d. For each categorical predictor, generate their conditional density plot of response variable.
+
+### --------- We firstly select the categorical variables.
+categorical_data <- data %>% select(c("address", "Pstatus", "activities", "higher", "internet"))
+
+### --------- Then we plot the plots.
+
+### --------- The distributions separated by address.
+categorical_data %>% 
+  ggplot() +
+  geom_density(mapping = aes(x = numerical_data$G3, color = address), size = 1) +
+  labs(x = "G3")
+
+### --------- The distributions separated by Pstatus.
+categorical_data %>% 
+  ggplot() +
+  geom_density(mapping = aes(x = numerical_data$G3, color = Pstatus), size = 1) +
+  labs(x = "G3")
+
+### --------- The distributions separated by activities.
+categorical_data %>% 
+  ggplot() +
+  geom_density(mapping = aes(x = numerical_data$G3, color = activities), size = 1) +
+  labs(x = "G3")
+
+### --------- The distributions separated by higher.
+categorical_data %>% 
+  ggplot() +
+  geom_density(mapping = aes(x = numerical_data$G3, color = higher), size = 1) +
+  labs(x = "G3")
+
+### --------- The distributions separated by internet.
+categorical_data %>% 
+  ggplot() +
+  geom_density(mapping = aes(x = numerical_data$G3, color = internet), size = 1) +
+  labs(x = "G3")
+```
+
+## e.
+
+Here we will discuss whether G3 is significantly different for students with and without extra-curricular activities. Here we do this by analyzing whether the two distributions, which are separated by activities, are significantly different. Firstly, we plot the density of G3 which is separated by activities again.
+
+```{r}
+categorical_data %>% 
+  ggplot() +
+  geom_density(mapping = aes(x = numerical_data$G3, color = activities), size = 1) +
+  labs(x = "G3")
+```
+
+From the plots, we cannot see big difference of G3's distributions between students with and without extra-curricular activities. However, just seeing they are not significantly different is not enough. We have to test it. Here, we use Z-test to test whether they are significantly different distribution[1].
+
+```{r}
+### Calculate the Z-statistic
+### --------- Firstly we separate the data.
+G3_Y <- data %>% filter(activities == "yes") %>% select("G3")
+G3_N <- data %>% filter(activities == "no") %>% select("G3")
+
+### --------- Then we use BSDA.z.test[2] to calculating the Z-statistic
+z.test(x = G3_Y$G3, y = G3_N$G3, mu = 0, alternative = "two.sided", sigma.x = sd(G3_Y$G3), sigma.y = sd(G3_N$G3))
+```
+
+In the z.test function. x and y is the two data samples. Mu is a single number representing the value of the mean or difference in means specified by the null hypothesis. Sigma.x and sigma.y are the population standard deviations for x and y. Here we set mu=0 because we want to test whether these two distributions are different, not whether they are very different, so we do not allow difference between the distributions in the hypothesis.
+
+Here we can see the Z-test result. Z-statistic equals to 0.31944. And there is 95% chance that Z-statistic is between -0.7567573 and 1.0514693. Because 0.31944 < 2, and absolute values of -0.7567573 and 1.0514693 also <2. We can say that these two distributions, which are separated by different activities are 95% chance **not significantly different**. 
+
+
+# Problem 3. Regression analysis
+
+### a.
+
+```{r}
+### Use all predictors in a standard linear regression model to predict the response variable. 
+
+### --------- Because we modified the data in question 2. We here will load the data again.
+data <- read.csv("./student-mat.csv", header = TRUE, sep = ";")
+
+### --------- Then we will fit the model by using all the prodictors.
+fit_all <- lm(G3 ~ . ,data = data)
+summary(fit_all)
+```
+
+Firstly, we will see the performance of the model by analyzing R2, adjusted R2 and RMSE.
+
+```{r}
+### --------- Calculate the RMSE
+model_mse <- mean(residuals(fit_all)^2)
+RMSE <- sqrt(model_mse)
+cat("RMSE of this model is:", RMSE)
+```
+
+We can see the RMSE of this model is 1.796979. Also we can see from the summary of the model that R2 and adjusted R2 are 0.8458 and 0.8279.
+
+Since G3 is from 0 to 20, and the RMSE is 1.79, we can know that the error this model made cannot be ignored. This model's R2=0.8458 means this model accounts for 84.6% of the variance in weights. Also the adjusted R2, which is adjusted for the number of predictors, is 0.828. The values of R2 and adjusted R2 show that this model is pretty useful.
+
+Then we will interpret the result of the model.
+
+Because some predictors are categorical, we can see that some coefficients' name are modified. This is because the model uses dummy variable here for some categorical variables. For example, we can see there is a coefficient named "addressU", this means when address=U, the value of the related variable should be 1, and when address=R, the variable for addressU in the model is 0, but the variable for addressR is 1. One thing we need to notice is the standard error of the categorical predictors are relatively high. This means the model is not "sure" what influence these predictors have.
+
+Then we can see p-value is very small, which means this model is significant. For the variables' coefficients, we can see that some coefficients of them are close to 0, which means these variables contribute little to the model. For example, the coefficients of absences is 0.045879. Therefore, we can see that absences might influence G3 only a little, which is not intuitive for us. 
+
+However, one thing need to be noticed is for some variables. For example, the guardian. Even though we can see guardianother's coefficient is just 0.006, this does not mean that guardian is not significant because guardianmother's coefficient is 0.19. We should be aware of these dummy variables' coefficients.
+
+Then if we analyze the coefficients, we can see G2 has the greatest impact on G3. If other predictors are fixed, when G2 increases 1, G3 will increases 0.95733. I think this case has two reasons. The first reason is G2 is also the grade, which makes G2, also G1, has more impact on G3. For instance, it is obvious that it will be easier for us to predict one's math grade of this time from the math grade of last time, but it will be harder for us to predict the grade from other kinds of predictors, like how many hours this person sleeps at night. The second reason is because G2 is issued at the 2nd period, which is just one year later than the final grade G3. Maybe in the third period, most of the students' ability is already shaped up. For example, maybe these schools already taught everything needed before the last year, so G2 can strongly reveal the ability of the students in the final test. In other words, in general, students have little to improve in the third period.
+
+As we discussed, G1 is also a grade, so we should expect it will also influence G3 a lot. However, we can see this is not fully true. G1's coefficients is 0.189, whose absolute value is much less than that of G2's coefficients. Also, compared with other non-grade predictors, this coefficient is not very important. I think this is because in the second period, which is between G1 and G2, the students are still gonna learning a lot. This is different with what happens in the third period. Therefore, the students still get chance to improve or make their grade regress in the second period. That's why G1 cannot influence G3 as much as G2.
+
+For other predictors, we can see the school also matters. We can see from the model that the coefficient of "SchoolMS" is 0.48, which means if two students are the same in other variables, the one learn in Mousinho da Silveira will has 0.48 higher G3 than the student learn in the other school. 
+
+Father's job also influences G3 somehow. If the student's father has care related job, the student's G3 will be higher. The other kinds of job have relatively "bad" influence on the student's G3, especially services related work.
+
+Here are also some important predictors, for example, extra educational support and reason to choose the school. However, we should always keep in mind that the model is not pretty sure about the influences of most of these predictors have. Therefore, some predictors might have opposite influence on G3 as the coefficient shows. For example, it seems going out with friends more will make G3 higher because the coefficient of goout is positive, but it could have negative influence on G3 because the standard error of this coefficient is relatively high.
+
+### b.
+
+Here in sub-question b, we will use leave-one-out cross-validation to evaluate the performance of the models.
+
+```{r}
+### b. Compare the standard linear regression models with three different set of predictors.
+
+### --------- Firstly, we will define a function[3] to calculate RMSE to use later,
+### --------- This function is the same as the function in code for class03, page 50.
+rmse <- function(y, h) {
+  return(sqrt(mean((y - h) ^ 2)))
+}
+
+### --------- Then we will also define a function to automatically fit and extract the performance
+
+fit_LOO <- function(dataset) {
+### Set different dataset.
+  if(dataset == ".") {
+    data_temp <- data
+  }
+  else {
+    data_temp <- data %>% select(c(dataset,"G3"))
+  }
+  
+  performance <- data.frame()
+
+### Make the string for generating the formula.
+  temp_set <- ""
+  for(i in dataset) {
+    temp_set <- paste(temp_set, "+", i)
+  }
+  dataset <- temp_set %>% substring(4)
+  
+### Use for loop to change the testing and training data.
+  for (t in 1:nrow(data_temp)) {
+    fit <- lm(as.formula(paste("G3 ~ ", dataset)) ,data = data_temp[-t, ])
+    predicted_value <- predict(fit, newdata = data_temp[t, ])
+    performance <- rbind(performance, data.frame(
+      TestData = t,
+      RMSE = rmse(data_temp[t,]$G3, predicted_value),
+      Predicted_G3 = predicted_value
+    ))
+  }
+  
+### bind the predicted G3 and the real G3
+  performance <- performance %>% mutate("Real_G3" = data$G3)
+  
+  return(performance)
+}
+
+### --------- Use different sets to fit and get the performances.
+performance_set_A <- fit_LOO(c("school", "sex", "age", "address", "Pstatus", "Medu", "Fedu", "Mjob", "Fjob", "traveltime", "studytime", "failures", "absences", "G1", "G2"))
+performance_set_B <- fit_LOO(c("school", "sex", "age", "studytime", "failures", "absences", "G1", "G2"))
+performance_set_C <- fit_LOO(c("school", "sex", "age", "address", "Pstatus", "Medu", "Fedu", "Mjob", "Fjob", "traveltime", "G1", "G2"))
+performance_set_all <- fit_LOO(".")
+
+### --------- Then we will calculate the average RMSE as the RMSE of each set.
+RMSE_A <- mean(performance_set_A$RMSE)
+RMSE_B <- mean(performance_set_B$RMSE)
+RMSE_C <- mean(performance_set_C$RMSE)
+RMSE_all <- mean(performance_set_all$RMSE)
+
+cat("RMSE of the model uses set A is", RMSE_A)
+cat("RMSE of the model uses set B is", RMSE_B)
+cat("RMSE of the model uses set C is", RMSE_C)
+cat("RMSE of the model uses all predictors is", RMSE_all)
+```
+
+Firstly, we have to notice that in leave-one-out cross-validation, the out-of-sample RMSE is as same as the average absolute value of the difference between predicted G3 and the real G3. This is because we only have one predicted value in each fold. This can be shown as following formula, in which n is the number of the folds, and m is the number of rows in testing data. We can know that in LOO-CV, m = 1.
+
+
+$$
+RMSE_{model} = \frac{1}{n} \sum_{t=1}^{n} RMSE_{onefold} \\ = \frac{1}{n} \sum_{t=1}^{n} \sqrt{\frac{1}{m}\sum_{i=1}^{m}\left( y_{t,i}-\hat{y_{t,i}} \right)^2} \\
+= \frac{1}{n} \sum_{t=1}^{n} \sqrt{\left( y_{t}-\hat{y_{t}} \right)^2} \\
+= \frac{1}{n} \sum_{t=1}^{n} |y_{t}-\hat{y_{t}}| = MAE_{model}
+$$
+
+
+Then we can see, in these four models, the model uses set B performs best because its out-of-sample RMSE is the smallest. Then we can see set C performs also good, and then the third good model is the one uses set A. Counterintuitively, the model which has all of the predictors performs the poorest.
+
+### c.
+
+In this question, we will build several non-linear models to improve the performances. 
+
+```{r}
+nOfRow <- nrow(data)
+
+  
+### --------- fit model with dataset A.
+performance <- data.frame()
+  for (t in 1:nOfRow) {
+    fit_A <- lm(G3 ~ school + sex + age + address + Pstatus + Medu + Fedu + Mjob + Fjob + traveltime + studytime + failures + absences + G1 + poly(G2, degree = 5), data = data[-t, ])
+    predicted_value <- predict(fit_A, newdata = data[t, ])
+    performance <- rbind(performance, data.frame(
+      TestData = t,
+      RMSE = rmse(data[t,]$G3, predicted_value),
+      Predicted_G3 = predicted_value
+    ))
+  }
+performance_A <- performance %>% mutate("Real_G3" = data$G3)
+
+### Calculate the out-of-sample RMSE of the model.
+RMSE_A_2 <- mean(performance_A$RMSE)
+cat("The RMSE of set A is", RMSE_A_2)
+
+### --------- fit model with dataset B.
+performance <- data.frame()
+  for (t in 1:nOfRow) {
+    fit_B <- lm(G3 ~ school + sex + age + studytime + failures + poly(absences, degree = 3) + G1 + poly(G2, degree = 3), data = data[-t, ])
+    predicted_value <- predict(fit_B, newdata = data[t, ])
+    performance <- rbind(performance, data.frame(
+      TestData = t,
+      RMSE = rmse(data[t,]$G3, predicted_value),
+      Predicted_G3 = predicted_value
+    ))
+  }
+performance_B <- performance %>% mutate("Real_G3" = data$G3)
+RMSE_B_2 <- mean(performance_B$RMSE)
+cat("The RMSE of set B is", RMSE_B_2)
+
+### --------- fit model with dataset C.
+performance <- data.frame()
+  for (t in 1:nOfRow) {
+    fit_C <- lm(G3 ~ school + sex + age + address + Pstatus + Medu + Fedu + Mjob + Fjob + traveltime + poly(G1, degree = 2) + poly(G2, degree = 5), data = data[-t, ])
+    predicted_value <- predict(fit_C, newdata = data[t, ])
+    performance <- rbind(performance, data.frame(
+      TestData = t,
+      RMSE = rmse(data[t,]$G3, predicted_value),
+      Predicted_G3 = predicted_value
+    ))
+  }
+performance_C <- performance %>% mutate("Real_G3" = data$G3)
+RMSE_C_2 <- mean(performance_C$RMSE)
+cat("The RMSE of set C is", RMSE_C_2)
+```
+
+In this question, we add poly(G2, degree = 5) in set A to make it a non-linear model. As we can see from the out-of-sample RMSE, it out-performs the linear model with set A because its RMSE is smaller.
+
+In set B, we add poly(absences, degree = 3) and poly(G2, degree = 3) to make it a non-linear model. However in this time, the non-linear model performs poorer than the related linear model.
+
+In set C, we add poly(G1, degree = 2) and poly(G2, degree = 5). This non-linear model also out-performs the related linear model because its out-of-sample RMSE is smaller.
+
+Among these three models, we can see that the model with set C is the best because it has the smallest out-of-sample RMSE.
+
+However, we can see the improvements are not big. For example, RMSE of linear set A model is 1.259716, and the RMSE of non-linear set A model is 1.254991. This means although the performance is improved, it just improved a little. Then we can recall that in question 2, we see manually from plots that G3 should has linear relationship with G2. Therefore, there is a question, why the performance can improve even we add poly(G2, degree=5) which is seems wrong. The answer in my brain is, although we use cross-validation, the model still overfits the data in this non-linear model. Also because this reason, the improvement is just a little because actually the model is trying to explain the residual.
+
+Actually, I tried lots of sets of predictors, and the trend I learn from the tests is the best model actually is the model which only has G2 or G2's higher order terms as predictor. If we add other predictors, the model will become worse. In my opinion, this is because actually G2 is sufficient to predict G3, so if we add other predictors, since we use cross-validation, the model will become overfit, which makes the out-of-sample RMSE bigger.
+
+In the conclusion, we add poly(G2, degree = 5) in set A, add poly(absences, degree = 3) and poly(G2, degree = 3) in set B, and add poly(G1, degree = 2) and poly(G2, degree = 5) in set C. The model with set A and the one with set C out-performed the linear mode with the same set. Among these three models, the model with set C has the smallest out-of-sample RMSE so it is the best one.
+
+
+### d.
+
+For all of these models, if we use out-of-sample RMSE as criterion, the linear regression model with dataset B is the best one. Its out-of-sample RMSE is the smallest among all models. Then, we will see the coefficients in this model.
+
+```{r}
+### d. 
+### --------- Here for the convinience, we just fit it again.
+fit_best <- lm(G3 ~ school + sex + age + studytime + failures + absences + G1 + G2, data = data)
+### --------- see the model
+fit_best
+```
+
+Because now we use lm to fit the models, we can use the absolute value of the coefficient to see whether a predictor is important. The bigger the absolute value of coefficient is, the more important the predictor is. This is because the absolute value of the coefficient means when other predictors are fixed, this predictor changes by 1, the G3 will change by this absolute value. Therefore, bigger absolute coefficient means G3 will change more when predictor changes by 1. By seeing which predictor has the biggest absolute coefficient, we can see the which predictor is the most important. 
+
+From the coefficients we can see the G2's coefficient has the biggest absolute value, which is 0.96052. This means G2 is the most important predictor in this model. The reason is just as what we discussed, I think this is because in the 3rd period, the students' math test ability will not change a lot. In other words, it is highly likely that the student who got a higher G2 grade in the 2nd period will also get a higher G3 grade in the 3rd period.
+
+Besides G2, as we discussed before, the school and number of past class failures are also important. However, we can say that G2 is the most important predictor if we use the absolute value of the coefficients as the criteria.
+
+
+# References
+
+[1] Comparing Distributions: Z Test. (n.d.-a). Comparing Distributions: Z Test. http://homework.uoregon.edu/pub/class/es202/ztest.html
+
+[2] z.test. (n.d.). RDocumentation. https://www.rdocumentation.org/packages/BSDA/versions/1.2.1/topics/z.test
+
+[3] Lin, Y. L. (n.d.). Class 03 slides. Github. https://yurulin.github.io/class-data-mining/slides/class03.html?full#cross-validation

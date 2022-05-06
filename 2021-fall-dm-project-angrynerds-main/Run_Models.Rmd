@@ -1,0 +1,11 @@
+```{r}
+container <- readRDS("./container3.rds")
+
+RF <- train_model(container,"RF")
+NNET <- train_model(container,"NNET")
+TREE <- train_model(container,"TREE")
+
+saveRDS(RF, "./RF2.rds")
+saveRDS(NNET, "./NNET2.rds")
+saveRDS(TREE, "./TREE2.rds")
+```

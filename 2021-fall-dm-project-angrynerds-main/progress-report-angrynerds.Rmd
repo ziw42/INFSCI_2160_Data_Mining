@@ -1,0 +1,170 @@
+---
+title: "Final Project: Progress Report"
+date: 11/18/2021
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+# Overview
+
+> In this progress report, you'll show some intermediate results of your final project. (Note: This milestone is considered as part of the project management. The grades are only tentative. You should focus on getting some progress. Your final project outcome will outweight the intermediate results.)
+
+0. (5%) Fill the basic information
+
+    * Project title: {Police Union Contract Review}
+    * Repository: {https://github.com/class-data-mining-master/2021-fall-dm-project-angrynerds}
+    * Team member(s): {replace the following with your member information}
+
+Wang, Zian (email: ziw42@pitt.edu)
+
+Gupta, Sonal (email: sog26@pitt.edu)
+
+Zheng, Shuo (email: shz113@pitt.edu)
+
+1. (40%) Extend your abstract, describe your project in more details. It should be 300--500 words in length providing:
+    + your project goal, or the problem you plan to work on; 
+    + (motivation and significance) why the problem is interesting and/or important; 
+    + the approach you plan to take, including what data mining tasks you will perform, and what potential techniques you will try; 
+    + what dataset you plan to use and how you will get the data (if the data is publicly available, provide the exact reference to the data; otherwise, provide a description about the data source).
+
+2. (30%) Give some preliminary description or analysis about your dataset(s). You should have early numbers or a figure in this report. This part can be short or long, depending on your actual progress. 
+
+3. (25%) The following questions are design to help you manage the progress in doing the final project. Your answers don't need to be long or detailed but will show that you have a plan to address them in your final report.
+    a) What do you try to accomplish in this project? What have you done so far?
+    b) What are the strengths/novelty of your proposed idea? Why is the problem challenging?
+    c) How will you evaluate your method(s)? What are the performance measures and baseline methods?
+    d) Have you found any the research or works related to your project/problem/data? Where do you find the related work? 
+    e) Are there any challenges you encounter so far? How do you plan to solve it?
+
+
+```{r document_setup, echo=F, message=F, warning=F}
+# This chunk can include things you need for the rest of the document
+library('ggplot2') ## most of the time you will need ggplot
+library("maps")
+library('dplyr')
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# 0. The basic information
+
+Project title: Police Union Contract Review
+Repository: https://github.com/class-data-mining-master/2021-fall-dm-project-angrynerds
+Team member(s): replace the following with your member information
+
+Wang, Zian (email: ziw42@pitt.edu)
+
+Gupta, Sonal (email: sog26@pitt.edu)
+
+Zheng, Shuo (email: shz113@pitt.edu)
+
+# 1. Extended abstract 
+
++ your project goal, or the problem you plan to work on:
+
+  We choose the recommended topic 4 - Data Mining to increase transparency of the police misconduct complaint process. Our goal is to build a system to analyze the contracts from police departments, and discover the problematic sentences or clauses, such as the ones that unfairly deprive citizens' right of complaining or the ones that give police officers some rights beyond the normal scope. The system will transfer the complicated contracts into a non-professional readable format and show them in a user-friendly way so that the user can easily find which part of the contract that the police departments in their municipalities use will unfairly take away their rights. It will also try to answer any queries a user might have regarding the complaint filing process. 
+
+
++ (motivation and significance) why the problem is interesting and/or important:
+
+  The police contracts sometimes are difficult to navigate. Hence, many citizens are left in the dark about how to approach police reforms. This problem is very socially-meaningful because by making the target model, we can alleviate and solve a social problem, which is hard, time consuming, but valuable to people, and worth the difficulty. We also want to learn text mining from such a real problem and try to contribute our own strengths. It is a very interesting problem for us because it will help us to know what part of contract is misused by police to take away citizens' rights. It will help to decrypt the crypted information behind the text.
+
+
++ the approach you plan to take, including what data mining tasks you will perform, and what potential techniques you will try:
+
+  We are first trying to do data pre-processing, including removing stopwords, stemming/lemmatization, convert to term-document matrices and use various potential modelling techniques like LSA, LDA and topic Modelling for this task. We'll try to build a UI Interface with the front-end tools and knowledge we already have and make this system interactive.
+
++ what dataset you plan to use and how you will get the data (if the data is publicly available, provide the exact reference to the data; otherwise, provide a description about the data source):
+
+  We are using the data provided to us. The data is avialable at: https://www.checkthepolice.org/database This dataset is from the "Police Union Contract Project". This dataset contains the police union contract from the 100 largest U.S. cities. 
+
+  We are also checking human-annotated data provided to us to study more about the problem and use it as the ground truth for the training process:
+https://www.checkthepolice.org/s/data.csv
+
+# 2. Preliminary results
+
+```{r}
+### Here we will explore our dataset.
+num_of_contracts <- length(list.files("./data"))
+cat("There are", num_of_contracts, "contracts in our dataset.")
+
+summary_table <- read.table("./summary.txt", header = FALSE, sep = ' ')
+colnames(summary_table) <- c("Contract_name", "Num_of_the_stopwords", "Num_of_words")
+
+summary(summary_table)
+
+
+summary_table[order(summary_table$Num_of_words),] %>% 
+  ggplot() +
+  geom_bar(mapping = aes(x = 1:nrow(summary_table), y = Num_of_words), stat = "identity", color = "navyblue", fill = "gold") +
+  xlab("") +
+  ylab("number of words")
+  
+```
+
+Here we use a java program to tokenize the contract files, then count the number of the words and stopwords in them. Here we use a stopwords library which is frequently used in information retrieval field.
+
+We can see that we have 87 contracts. This seems a little dataset, but since we will use vector space model to represent the contracts, all 602 problematic sentences in the ground truth file will be used to train the model. Therefore, this is a relatively huge dataset.
+
+We can find that the longest contract has 83670 terms, and the shortest contract only has 427 words. And from the bar plot we can see that a small portion of contracts have very little words, and also a small portion of contracts have very many words. Most of the contracts have 15000-40000 words.
+
+Here we met more problems. The first is the stopwords library we use. We can make a plot to see the distribution of the numbers of stopwords in contracts.
+
+```{r}
+summary_table[order(summary_table$Num_of_the_stopwords),] %>% 
+  ggplot() +
+  geom_bar(mapping = aes(x = 1:nrow(summary_table), y = Num_of_the_stopwords), stat = "identity", color = "navyblue", fill = "gold") +
+  xlab("") +
+  ylab("number of words")
+```
+
+We can see that the number of stopwords in the contracts nearly grows linearly, but there are some contracts that contain more than 20000 stopwords, which is too many. The reason is, for now, the stopwords library we use contains too many stopwords. This library is used for Information Retrieval systems, so it is not very proper for our system. Therefore, the first problem is we have to find a more suitable stopwords library. We plan to try several stopword libraries, compare their performance, then pick the best one.
+
+The second problem is we have not transform the contracts to matrices. In the future we will firstly remove stopwords, stem the contracts, then transform them to term-document matrices for the next steps.
+
+# 3. Your answers to Problem 3.
+
+a) What do you try to accomplish in this project? What have you done so far?
+
+  We are trying to to build a system to analyze the contracts from police departments and discover the problematic sentences or clauses. 
+
+  We are trying to create data mining modules to read the contract files and transform it to user-friendly language in order to answer citizen's questions about the complaint process.
+After we are done with data mining modules, we'll create the intelligent and interactive decision support system that facilitates citizen's understanding about the complaint process.
+
+  So far, we did the data exploration part- Explored all the contracts data to see the dimensions and structure of data. We counted words and stopwords in our data. We are trying to use stopwords removal library to remove stopwords and estimating which library will meet our needs. Next we will transform the data in the tf-idf matrices and then use vector space models. We plan to use LDA, LSA (Latent Semantic Analysis) model and Latent Semantic Indexing (LSI) to match the given search query found with the help of the vector that is developed from LSA. We also need to determine the optimal number of topics required for topic modeling.
+    
+b) What are the strengths/novelty of your proposed idea? Why is the problem challenging?
+
+  The police contracts are usually very complicated and hard to understand, for people who is not familiar with the police contract. Having an intelligent interface (a chatbot) which asks which state we are in and what kind of help do we need regarding the complaint process would be very helpful to normal citizens. 
+
+  The challenging parts are this is really a huge dataset, every term in all the 87 documents counts except the stop words. We feel that applying different modeling techniques would also be challenging. We are still figuring out and getting to know the problem in detail.
+
+c) How will you evaluate your method(s)? What are the performance measures and baseline methods?
+
+  We will use k-fold cross validation to evaluate our methods. Since the data set is too large, we can not user leave on out valiation method, k-fold is more appropriate to just cut down k folds to the evaluation. We will classified sentences into several problem classes or no problem class, use one hot code to code the classes, then use Accuracy, Precision, Recall, F-1 Score, Mean Average Precision RMSE to evaluate the performance.
+
+To evaluate topic models, Topic Coherence will be used. It uses the latent variable models. Each generated topic has a list of words. In topic coherence, we will find either the average or the median of pairwise word similarity scores of the words present in a topic. The model will be considered as a good topic model if we got the high value of the topic coherence score.
+
+We will use probablistic models like Naive Bayes classifier for baseline methods.
+ 
+d) Have you found any the research or works related to your project/problem/data? Where do you find the related work? 
+
+  Police Institutions and Police Abuse: Evidence from the US, this paper is very useful https://campaignzero.org/static/static/55ad38b1e4b0185f0285195f/t/5c491ac8b91c91570026453b/1548294860533/Police+Institutions+and+Police+Abuse+-+Evidence+from+the+US+(1).pdf
+
+  CUAD: An Expert-Annotated NLP Dataset for Legal Contract Review
+https://arxiv.org/abs/2103.06268
+
+e) Are there any challenges you encounter so far? How do you plan to solve it?
+
+  So far, we think using R to do data cleaning for all the contracts is complicated, so we used java to preprocess the data then use R to do the data visuliazation to show number of stopwords and actual words in dataset. We are still reading different papers and the information we already have to solve the problem.

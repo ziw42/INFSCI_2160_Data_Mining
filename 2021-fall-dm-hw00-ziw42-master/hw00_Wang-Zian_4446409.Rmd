@@ -1,0 +1,92 @@
+---
+title: "R Markdown Homework Template"
+author: "Wang, Zian (email: ziw42@pitt.edu)"
+date: 09/04/2021
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+# Overview
+
+This is a simple homework assignment template using [R Markdown](http://rmarkdown.rstudio.com). 
+
+* R Markdown is a convenient way of writing reports which includes R code and the code's automatically-generated output. 
+* To learn how to use R Markdown, see the [References & Further Reading](#refs) below in this document. 
+* You will write your homework following the structure provided in this template. 
+
+```{r document_setup, echo=F, message=F, warning=F}
+# This chunk can include things you need for the rest of the document
+library('ggplot2') ## most of the time you will need ggplot
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# 1. "PROBLEM NUMBER ONE"
+
+Notice that in the previous line we can create a header for our problem number by using a single "#". The text is then automatically bolded and indented. Below we will create a sublist. This should be used if problems have more than one part.
+
+
+
+## a. "PROBLEM NUMBER ONE, PART A Answer"
+
+
+## b.
+
+
+## c.
+
+
+## d.
+
+
+
+
+
+# 2. "PROBLEM NUMBER TWO"
+
+
+Suppose we need to input an R chunk into our homework file. In this case, the following syntax should be used. Note that "'''" signifies we are include chunks of code (We may also tweak the options as necessary). In this template, all the code chunks are folded (by default), you can change the look by changing the `code_folding` parameter (at the beginning of the \*.Rmd) or clicking the fold/unfold button (at the top of the \*.html).
+
+
+```{r tidy = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#input R code here. Examples:
+#define R list
+x = c(1,2,3,4,5)
+#make plot
+plot(x)
+```
+
+Below the R code, we can provide additional descriptions and/or explain our code more thoroughly.
+
+
+
+# 3. "AND REPEAT...."
+
+```{r tidy = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#again, we can input our R code here.
+```
+
+# References & Further Reading {#refs}
+
+* [R Markdown](http://rmarkdown.rstudio.com/) extends the [Markdown](http://daringfireball.net/projects/markdown/basics) language. It lets you include nicely-typeset math, hyperlinks, images, and some basic formatting. The [R Markdown Quick Tour](https://rmarkdown.rstudio.com/authoring_quick_tour.html) and [Introduction to R Markdown](https://rmarkdown.rstudio.com/articles_intro.html) show you how to write an R Markdown report in RStudio.
+
+* For creating homework/project reports, check out [this guide](https://ntaback.github.io/UofT_STA130/Rmarkdownforclassreports.html#basic_formatting_in_r_markdown) to learn how to use its most essential features.
+
+* [R Markdown Cheat Sheet](https://rstudio.com/wp-content/uploads/2016/03/rmarkdown-cheatsheet-2.0.pdf) is a two-slide reference guide. (Search online and you'll find various versions -- see which one you like.)
+
+* For other useful resources, check out [Learn R Markdown](https://rmarkdown.rstudio.com/docs/articles/rmarkdown.html).
+
+## Acknowledgments
+
+This document was adopted from several good resources: Prof. Debdeep Pati's [homework template](https://www.stat.tamu.edu/~debdeep/Homework.html), Prof. Nathan Taback's [Using R Markdown for Class Assignments](https://ntaback.github.io/UofT_STA130/Rmarkdownforclassreports.html#basic_formatting_in_r_markdown) (which was adopted from Cozma Shalizi's [guide](http://www.stat.cmu.edu/~cshalizi/rmarkdown/)).

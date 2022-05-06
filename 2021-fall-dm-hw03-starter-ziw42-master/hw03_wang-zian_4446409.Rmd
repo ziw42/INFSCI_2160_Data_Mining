@@ -1,0 +1,752 @@
+
+---
+title: "Homework 03"
+author: "Wang, Zian (email: ziw42@pitt.edu)"
+date: 10/15/2021
+output:
+  html_document:
+    code_folding: hide
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+<style>
+    table {
+      border-collapse: collapse;
+    }
+      table, th, td, thead, tbody{
+        border: 1px solid black;
+    }
+    thead {
+        border-bottom: solid black;
+    }
+</style>
+
+# Overview
+
+> You'll use the dataset "Pokemon" for this assignment (the data is `hw03-data-pokemon.csv` and description is `hw03-data-pokemon_description.txt`). The original data source is from Kaggle [Pokemon dataset](https://www.kaggle.com/abcsds/pokemon). 
+
+> The objective of this task is to predict the binary target variable `Total (> 500 or not)`. You can extend the samle R code for this assignment: `hw03-sample.R`
+
+
+Task: Apply different classification techniques (including logistic regression, kNN, Naive Bayesian, decision tree, SVM, and Ensemble methods) on this dataset. Use all available predictors in your models.
+    
+1. Use a 10-fold cross-validation to evaluate different classification techniques. 
+
+a. Report your 10-fold CV classification results in a performance table. In the table, report the values of different performance measures for each classification technique. For example, you will generate a table like:
+
+
+  Tables        | logistic      |  KNN    |   NB    |   Decision tree |  SVM  | Ensemble  |
+ ---------------|---------------| --------|---------|-----------------|-------|-----------|
+  accuracy      |               |         |         |                 |       |           |
+  precision     |               |         |         |                 |       |           |
+  recall        |               |         |         |                 |       |           |
+  F1            |               |         |         |                 |       |           |
+  AUC           |               |         |         |                 |       |           |
+
+    
+b. Generate two bar charts, one for F-score and one for AUC, that allow for visually comparing different classification techniques.
+
+
+2. Report at least two variants for techniques with parameters and incorporate them into your table. For examples, for kNN, you may include kNN-1, kNN-3, kNN-5. For decision tree, you may include the default tree, and a tree after pruning. For SVM, you may include different kernels and gamma/cost parameters.
+  
+  
+3. Generate an ROC plot that plot the ROC curve of each model into the same figure and include a legend to indicate the name of each curve. For techniques with variants, plot the best curve that has the highest AUC.
+  
+4. Summarize the model performance based on the table and the ROC plot in one or two paragraphs.
+  
+**hint: Coerce the categorical variables into discrete numbers because some of the techniques (e.g., kNN) cannot take categorical variables as input.**
+    
+        
+
+
+```{r document_setup, echo=F, message=F, warning=F}
+# This chunk can include things you need for the rest of the document
+library('ggplot2') ## most of the time you will need ggplot
+library('dplyr') ## This is used to preprocess the data
+library('class') ## This is for knn classification
+library('MASS') # for the example dataset 
+library('plyr') # for recoding data
+library('ROCR') # for plotting roc
+library('e1071') # for NB and SVM
+library('rpart') # for decision tree
+library('ada') # for adaboost
+library('knitr') # This is for output the performance table in question 1a.
+
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# Problem 1: Use a 10-fold cross-validation to evaluate different classification techniques.
+
+-----------------------------
+
+Firstly, we will adjust the format of the data and do the pre-tests to see whether the classification packets can build models based on our data.
+
+-----------------------------
+
+```{r}
+### This trunk is used to define the functions we need later.
+
+### This is the function from hw03-sample.R. This is used to wrap up different 
+### Classification packets.
+do.classification <- function(train.set, test.set, 
+                              cl.name, verbose=F) {
+  ## note: to plot ROC later, we want the raw probabilities,
+  ## not binary decisions
+  switch(cl.name, 
+         knn = { # here we test k=3; you should evaluate different k's
+           prob = knn(train.set[,-1], test.set[,-1], train.set[,1], k = 3, prob=T)
+           prob
+         },
+         lr = { # logistic regression. 
+           # Here we set maxit = 100 to let it congverge.
+           model = glm(y~., family=binomial, data=train.set, maxit = 100)
+           if (verbose) {
+             print(summary(model))             
+           }
+           prob = predict(model, newdata=test.set, type="response") 
+           prob
+         },
+         nb = {
+           model = naiveBayes(y~., data=train.set)
+           prob = predict(model, newdata=test.set, type="raw") 
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         dtree = {
+           model = rpart(y~., data=train.set)
+           if (verbose) {
+             print(summary(model)) # detailed summary of splits
+             printcp(model) # print the cross-validation results
+             plotcp(model) # visualize the cross-validation results
+             ## plot the tree
+             plot(model, uniform=TRUE, main="Classification Tree")
+             text(model, use.n=TRUE, all=TRUE, cex=.8)
+           }           
+           prob = predict(model, newdata=test.set)
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         svm = {
+           model = svm(y~., data=train.set, probability=T)
+           prob = predict(model, newdata=test.set, probability = T)
+           prob = attr(prob,"probabilities")
+           prob = prob[,which(colnames(prob)== ">500")]/rowSums(prob)
+           prob
+         },
+         ada = {
+           model = ada(y~., data = train.set)
+           prob = predict(model, newdata=test.set, type='probs')
+           prob = prob[,2]/rowSums(prob)
+           prob
+         }
+  ) 
+}
+
+### This function is used to preprocess the data. We will pick out the variables
+### we need and change the type of some variables.
+
+preprocess <- function(data, cl.name) {
+  ## This function is used to preprocess the data.
+  ## Only the variables we need will be left, also we will change the name
+  ## of "Total" to 'y'
+  
+  ## Here the knn package needs some special data types to correctly build the
+  ## model, so if we are going to use knn, we will preprocess the data in a 
+  ## different way.
+  if(cl.name == "knn"){
+    data <- data %>% 
+             mutate(Type.1 = as.numeric(as.factor(Type.1))) %>%
+             mutate(Type.2 = as.numeric(as.factor(Type.2))) %>% 
+             mutate(Legendary = as.numeric(ifelse(Legendary == "FALSE", 0 ,1))) %>%
+             mutate(Total = as.numeric(ifelse(Total == "<=500", 0 ,1)))
+             names(data)[13] <- "y"
+             data <- data %>% dplyr::select(3:13)
+             ### Make the 'y' column to the first.
+             data <- data %>% dplyr::select(y, everything())
+  }
+  else {
+    data <- data %>% 
+             mutate(Type.1 = as.factor(Type.1)) %>% 
+             mutate(Type.2 = as.factor(Type.2)) %>% 
+             mutate(Legendary = as.factor(Legendary)) %>% 
+             mutate(Total = as.factor(Total))
+             names(data)[13] <- "y"
+             data <- data %>% dplyr::select(3:13)
+  }
+  
+  
+  return(data)
+}
+
+### This funtion is used to do pre-test.
+
+pre.test <- function(dataset, cl.name, r=0.6, prob.cutoff=0.5) {
+  ## Let's use 60% random sample as training and remaining as testing
+  ## by default use 0.5 as cut-off
+  n.obs <- nrow(dataset) # no. of observations in dataset
+  n.train = floor(n.obs*r)
+  train.idx = sample(1:n.obs,n.train)
+  train.idx
+  train.set = dataset[train.idx,]
+  test.set = dataset[-train.idx,]
+  cat('pre-test',cl.name,':',
+      '#training:',nrow(train.set),
+      '#testing',nrow(test.set),'\n')
+  prob = do.classification(train.set, test.set, cl.name)
+  # prob is an array of probabilities for cases being positive
+  ## get confusion matrix
+  if(cl.name != "knn") {
+    predicted = as.numeric(prob > prob.cutoff)
+  }
+  else {
+    predicted = prob
+  }
+  actual = test.set$y
+  confusion.matrix = table(actual,factor(predicted,levels=c(0,1)))
+  error = (confusion.matrix[1,2]+confusion.matrix[2,1]) / nrow(test.set)  
+  cat('error rate:',error,'\n')
+  # you may compute other measures based on confusion.matrix
+  # @see handout03 p.32-36
+  
+  if(cl.name == "knn") {
+    prob_1 <- prob %>% as.numeric() - 1
+    prob_2 <- prob %>% attr("prob")
+    for (i in 1:length(prob_2)) {
+      if(prob_1[i] == 1) {
+       prob_2[i] <- prob_2[i]
+     }
+     else {
+       prob_2[i] <- 1 - prob_2[i]
+     }
+    }
+    prob <- prob_2
+  }
+  result = data.frame(prob,actual)
+  pred = prediction(result$prob,result$actual)
+  perf = performance(pred, "tpr","fpr")
+}
+```
+
+-----------------------------
+
+Now we preprocess the data and pre-test the models.
+
+-----------------------------
+
+```{r}
+### In this trunk, we preprocess the data and pre-test the models.
+
+## Set the seed to make the result reproducible.
+set.seed(123)
+
+### Read the data.
+data <- read.csv("./hw03-data-pokemon.csv", header = TRUE)
+### Check if there is missing values in the dataset.
+if(any(is.na(data))) {
+  cat("This data has missing value")
+} else if (!any(is.na(data))) {
+  cat("This data does not have missing value")
+}
+```
+
+Here we see there is no missing value in dataset, so we can move on to do preprocess and pre-test.
+
+```{r}
+
+### Do preprocess and pre-test the models.
+data <- data %>% preprocess("knn")
+perf_knn <- pre.test(data, "knn")
+
+### Here we have to reload the data because we "delete" some columns before.
+data <- read.csv("./hw03-data-pokemon.csv", header = TRUE)
+data <- data %>% preprocess("lr")
+perf_lr <- pre.test(data, "lr")
+
+### Because all other classification packages use the same format of data, here
+### can just use the old one.
+perf_nb <- pre.test(data, "nb")
+
+perf_dtree <- pre.test(data, "dtree")
+
+perf_svm <- pre.test(data, "svm")
+
+perf_ada <- pre.test(data, "ada")
+
+### Then we plot the ROC curves in one plot.
+plot(perf_knn, col = "orange")
+plot(perf_lr, add = T, col = "red")
+plot(perf_nb, add = T, col = "green")
+plot(perf_dtree, add = T, col = "blue")
+plot(perf_svm, add = T, col = "black")
+plot(perf_ada, add = T, col = "purple")
+legend(0.7, 0.37, legend=c("lr", "knn", "nb", "dtree", "svm", "ada"),
+       col=c("red", "orange", "green", "blue", "black", "purple"), lty=1, cex=0.8)
+```
+
+-----------------------------
+
+Here we can see that for the pre-test, all packages can produce the result and we can successfully draw the ROC curve of all these models.
+
+-----------------------------
+
+## Problem 1a: Report your 10-fold CV classification results in a performance table.
+
+YOUR ANSWER for Problem 1a.
+
+```{r}
+### Here we will firstly define the wrap-up function for cross validation.
+### This function comes from "hw03-sample.R".
+
+k.fold.cv <- function(dataset, cl.name, k.fold=10, prob.cutoff=0.5) {
+  ## default: 10-fold CV, cut-off 0.5 
+  n.obs <- nrow(dataset) # no. of observations 
+  s = sample(n.obs)
+  errors = dim(k.fold)
+  probs = NULL
+  actuals = NULL
+  for (k in 1:k.fold) {
+    test.idx = which(s %% k.fold == (k-1) ) # use modular operator
+    train.set = dataset[-test.idx,]
+    test.set = dataset[test.idx,]
+    cat(k.fold,'-fold CV run',k,cl.name,':',
+        '#training:',nrow(train.set),
+        '#testing',nrow(test.set),'\n')
+    prob = do.classification(train.set, test.set, cl.name)
+    if(cl.name == "knn") {
+      predicted = prob
+    }
+    else {
+      predicted = as.numeric(prob > prob.cutoff)
+    }
+    actual = test.set$y
+    confusion.matrix = table(actual,factor(predicted,levels=c(0,1)))
+    confusion.matrix
+    error = (confusion.matrix[1,2]+confusion.matrix[2,1]) / nrow(test.set)  
+    errors[k] = error
+    cat('\t\terror=',error,'\n')
+    if(cl.name == "knn") {
+      prob_1 <- prob %>% as.numeric() - 1
+      prob_2 <- prob %>% attr("prob")
+      for (i in 1:length(prob_2)) {
+        if(prob_1[i] == 1) {
+          prob_2[i] <- prob_2[i]
+        }
+        else {
+          prob_2[i] <- 1 - prob_2[i]
+        }
+      }
+      prob <- prob_2
+    }
+    probs = c(probs,prob)
+    actuals = c(actuals,actual)
+    ## you may compute other measures and store them in arrays
+  }
+  avg.error = mean(errors)
+  cat(k.fold,'-fold CV results:','avg error=',avg.error,'\n')
+  
+  ## plot ROC
+  result = data.frame(probs,actuals)
+  pred = prediction(result$probs,result$actuals)
+  perf = performance(pred, "tpr","fpr")
+  
+  ## get other measures by using 'performance'
+  get.measure <- function(pred, measure.name='auc') {
+    perf = performance(pred,measure.name)
+    m <- unlist(slot(perf, "y.values"))
+#     print(slot(perf, "x.values"))
+#     print(slot(perf, "y.values"))
+    m
+  }
+  err = mean(get.measure(pred, 'err'))
+  accuracy = 1 - err
+  precision = mean(get.measure(pred, 'prec'),na.rm=T)
+  recall = mean(get.measure(pred, 'rec'),na.rm=T)
+  fscore = mean(get.measure(pred, 'f'),na.rm=T)
+  cat('error=',err,'precision=',precision,'recall=',recall,'f-score',fscore,'\n')
+  auc = get.measure(pred, 'auc')
+  cat('auc=',auc,'\n')
+  result <- c(accuracy, precision, recall, fscore, auc)
+  return(result)
+}
+
+### Then we use k.fold.cv to do 10-fold cross-validation of these classification techniques.
+
+result_lr <- k.fold.cv(data, "lr")
+result_nb <- k.fold.cv(data, "nb")
+result_dtree <- k.fold.cv(data, "dtree")
+result_svm <- k.fold.cv(data, "svm")
+result_ada <- k.fold.cv(data, "ada")
+### Here we have to reload the data because knn packet needs different format of the data
+data <- read.csv("./hw03-data-pokemon.csv", header = TRUE)
+### Re-preprocess
+data <- preprocess(data, "knn")
+### Do cross-validation for knn.
+result_knn <- k.fold.cv(data, "knn")
+
+### Then we make the results as a data frame and print it.
+result_df <- as.data.frame(result_lr)
+result_df <- result_df %>% cbind(as.data.frame(result_knn))
+result_df <- result_df %>% cbind(as.data.frame(result_nb))
+result_df <- result_df %>% cbind(as.data.frame(result_dtree))
+result_df <- result_df %>% cbind(as.data.frame(result_svm))
+result_df <- result_df %>% cbind(as.data.frame(result_ada))
+row.names(result_df) <- c("accuracy", "precision", "recall", "F1", "AUC")
+colnames(result_df) <- c("logistic", "KNN", "NB", "Decision tree", "SVM", "Ensemble")
+kable(result_df)
+```
+
+--------------------------------
+
+Here, we generate a table to show the performances of 10-fold CV classification of different models.
+
+--------------------------------
+
+## Problem 1b: Generate two bar charts
+
+YOUR ANSWER for Problem 1b.
+
+```{r}
+## Here we will generate two bar charts, one for F-score and one for AUC.
+
+### Firstly, we will transpose the dataframe.
+t_result <- t(result_df) %>% as.data.frame()
+
+### Then we will generate the plots.
+t_result %>% ggplot() +
+  geom_bar(mapping = aes(x = c("logistic", "KNN", "NB", "Decision tree", "SVM", "Ensemble"), y = F1), stat = "identity", fill = "navyblue", color = "gold") +
+  xlab("classification technique")
+
+t_result %>% ggplot() +
+  geom_bar(mapping = aes(x = c("logistic", "KNN", "NB", "Decision tree", "SVM", "Ensemble"), y = AUC), stat = "identity", fill = "gold", color = "navyblue") +
+  xlab("classification technique")
+```
+
+-----------------------------
+
+Here, we generate two bar charts to show the F1 and AUC for different classification model.
+
+We can see from the charts that judged by F1, the logistic regression model definitly performs the best. Using AUC as criterion, SVM model performs the best, but only slightly better than the second and the third best model.
+
+-----------------------------
+
+# Problem 2. Report at least two variants for techniques with parameters and incorporate them into your table.
+
+YOUR ANSWER for Problem 2.
+
+We will firstly modify a little about our wrap-up functions to let us can assign the values of K in KNN, or gamma, cost, and kernel in SVM.
+
+```{r}
+## Here, we will firstly make some modification to our previous wrap-up functions.
+## We will make it can accept different values for "K", "gamma_in", "cost_in", and "kernel_in" to make us can use this function for different classification models without assigning these values.
+
+do.classification_variant <- function(train.set, test.set, cl.name, verbose=F, K = 3,
+                              gamma_in = 10^-3, cost_in = 10, kernel_in =
+                              "radial") 
+  {
+  ## Here we make "K" a default value to make us can use this function for other
+  ## classifications without assigning value to K.
+  switch(cl.name, 
+         knn = {
+           prob = knn(train.set[,-1], test.set[,-1], train.set[,1], k = K, prob=T)
+           prob
+         },
+         svm = {
+           model = svm(y~., data=train.set, probability=T, gamma = gamma_in, cost = cost_in, kernel = kernel_in)
+           prob = predict(model, newdata=test.set, probability = T)
+           prob = attr(prob,"probabilities")
+           prob = prob[,which(colnames(prob)== ">500")]/rowSums(prob)
+           prob
+         },
+         lr = { # logistic regression. 
+           # Here we set maxit = 100 to let it congverge.
+           model = glm(y~., family=binomial, data=train.set, maxit = 100)
+           if (verbose) {
+             print(summary(model))             
+           }
+           prob = predict(model, newdata=test.set, type="response") 
+           prob
+         },
+         nb = {
+           model = naiveBayes(y~., data=train.set)
+           prob = predict(model, newdata=test.set, type="raw") 
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         dtree = {
+           model = rpart(y~., data=train.set)
+           if (verbose) {
+             print(summary(model)) # detailed summary of splits
+             printcp(model) # print the cross-validation results
+             plotcp(model) # visualize the cross-validation results
+             ## plot the tree
+             plot(model, uniform=TRUE, main="Classification Tree")
+             text(model, use.n=TRUE, all=TRUE, cex=.8)
+           }           
+           prob = predict(model, newdata=test.set)
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         ada = {
+           model = ada(y~., data = train.set)
+           prob = predict(model, newdata=test.set, type='probs')
+           prob = prob[,2]/rowSums(prob)
+           prob
+         }
+  ) 
+}
+
+k.fold.cv_variant <- function(dataset, cl.name, k.fold=10, prob.cutoff=0.5, K = 3,
+                              gamma_in = 10^-3, cost_in = 10, kernel_in =
+                              "radial") {
+  ## Here we also set default values for K, gamma_in, cost_in, and kerner_in for      ## letting us can use this function without assigning them.
+  ## default: 10-fold CV, cut-off 0.5 
+  n.obs <- nrow(dataset) # no. of observations 
+  s = sample(n.obs)
+  errors = dim(k.fold)
+  probs = NULL
+  actuals = NULL
+  for (k in 1:k.fold) {
+    test.idx = which(s %% k.fold == (k-1) ) # use modular operator
+    train.set = dataset[-test.idx,]
+    test.set = dataset[test.idx,]
+    cat(k.fold,'-fold CV run',k,cl.name,':',
+        '#training:',nrow(train.set),
+        '#testing',nrow(test.set),'\n')
+    if(cl.name == "knn") {
+      prob = do.classification_variant(train.set, test.set, cl.name, K = K)
+    }
+    else {
+      prob = do.classification_variant(train.set, test.set, cl.name, gamma_in = gamma_in, cost_in = cost_in, kernel_in = kernel_in)
+    }
+    if(cl.name == "knn") {
+      predicted = prob
+    }
+    else{
+      predicted = as.numeric(prob > prob.cutoff)
+    }
+    actual = test.set$y
+    confusion.matrix = table(actual,factor(predicted,levels=c(0,1)))
+    confusion.matrix
+    error = (confusion.matrix[1,2]+confusion.matrix[2,1]) / nrow(test.set)  
+    errors[k] = error
+    cat('\t\terror=',error,'\n')
+    if(cl.name == "knn") {
+      prob_1 <- prob %>% as.numeric() - 1
+      prob_2 <- prob %>% attr("prob")
+      for (i in 1:length(prob_2)) {
+        if(prob_1[i] == 1) {
+          prob_2[i] <- prob_2[i]
+        }
+        else {
+          prob_2[i] <- 1 - prob_2[i]
+        }
+      }
+      prob <- prob_2
+    }
+    probs = c(probs,prob)
+    actuals = c(actuals,actual)
+    ## you may compute other measures and store them in arrays
+  }
+  avg.error = mean(errors)
+  cat(k.fold,'-fold CV results:','avg error=',avg.error,'\n')
+  
+  ## plot ROC
+  result = data.frame(probs,actuals)
+  pred = prediction(result$probs,result$actuals)
+  perf = performance(pred, "tpr","fpr")
+  
+  ## get other measures by using 'performance'
+  get.measure <- function(pred, measure.name='auc') {
+    perf = performance(pred,measure.name)
+    m <- unlist(slot(perf, "y.values"))
+    m
+  }
+  err = mean(get.measure(pred, 'err'))
+  accuracy = 1 - err
+  precision = mean(get.measure(pred, 'prec'),na.rm=T)
+  recall = mean(get.measure(pred, 'rec'),na.rm=T)
+  fscore = mean(get.measure(pred, 'f'),na.rm=T)
+  cat('error=',err,'precision=',precision,'recall=',recall,'f-score',fscore,'\n')
+  auc = get.measure(pred, 'auc')
+  cat('auc=',auc,'\n')
+  result <- c(accuracy, precision, recall, fscore, auc)
+  return(result)
+}
+```
+
+-----------------------------
+
+Then we will use the modified functions to do CV of the variants. We will use KNN-1, KNN-2, KNN-3, KNN-5. Also we will set the gamma of SVM to 10^-6, 10^-3, and 10^-1, and change the cost of SVM 
+from 10 to 100, and change the kernel of SVM to linear kernel.
+
+-----------------------------
+
+```{r}
+### In this trunk, we will use the modified function to do cross-validation of the variants.
+
+### Do 10-fold CV by using KNN.
+result_k1 <- k.fold.cv_variant(data, "knn", K = 1)
+result_k5 <- k.fold.cv_variant(data, "knn", K = 5)
+result_k10 <- k.fold.cv_variant(data, "knn", K = 10)
+
+
+### Here we have to reload the data and re-preprocess it to make it work on SVM model.
+### Then we do 10-fold CV by using SVM.
+data <- read.csv("./hw03-data-pokemon.csv", header = TRUE)
+data <- preprocess(data, "svm")
+result_gamma_6 <- k.fold.cv_variant(data, "svm", gamma_in = 10^-6)
+result_gamma_3 <- k.fold.cv_variant(data, "svm", gamma_in = 10^-3)
+result_gamma_1 <- k.fold.cv_variant(data, "svm", gamma_in = 10^-1)
+result_cost_2 <- k.fold.cv_variant(data, "svm", cost_in = 10^2)
+result_kernel_linear <- k.fold.cv_variant(data, "svm", kernel_in = "linear")
+
+### Regenerate the performance table.
+result_df <- result_df %>% cbind(as.data.frame(result_k1))
+result_df <- result_df %>% cbind(as.data.frame(result_k5))
+result_df <- result_df %>% cbind(as.data.frame(result_k10))
+row.names(result_df) <- c("accuracy", "precision", "recall", "F1", "AUC")
+colnames(result_df) <- c("logistic", "KNN-3", "NB", "Decision tree", "SVM", "Ensemble", "KNN-1", "KNN-5", "KNN-10")
+kable(result_df)
+
+### Here because the table is too long, we divide the big table into two smaller one.
+result_df_2 <- as.data.frame(result_gamma_6)
+result_df_2 <- result_df_2 %>% cbind(as.data.frame(result_gamma_3))
+result_df_2 <- result_df_2 %>% cbind(as.data.frame(result_gamma_1))
+result_df_2 <- result_df_2 %>% cbind(as.data.frame(result_cost_2))
+result_df_2 <- result_df_2 %>% cbind(as.data.frame(result_kernel_linear))
+row.names(result_df_2) <- c("accuracy", "precision", "recall", "F1", "AUC")
+colnames(result_df_2) <- c("SVM gamma=10^-6", "SVM gamma=10^-3", "SVM gamma=10^-1", "SVM cost=100", "SVM kernel=linear")
+kable(result_df_2)
+```
+
+------------------------------
+
+Here because the table is too long, we divide it into two small tables.
+
+------------------------------
+
+
+
+# Problem 3. Generate an ROC plot
+
+-----------------------------
+
+We can see from the table we generated in question 2 that for variants of KNN, KNN-10 performs the best. For SVM, the SVM with linear kernel performs the best. Therefore, we will use these two variants stand for KNN and SVM model.
+
+Here will will also modify the k.fold.cv wrap-up function a little to make it output the performance result.
+
+-----------------------------
+
+YOUR ANSWER for Problem 3.
+
+```{r}
+### Here we let this wrap-up function outputs the perf, and we will use this to plot all the ROC curves on one plot.
+
+k.fold.cv_p <- function(dataset, cl.name, k.fold=10, prob.cutoff=0.5, K = 3,
+                              gamma_in = 10^-3, cost_in = 10, kernel_in =
+                              "radial") {
+  ## default: 10-fold CV, cut-off 0.5 
+  n.obs <- nrow(dataset) # no. of observations 
+  s = sample(n.obs)
+  errors = dim(k.fold)
+  probs = NULL
+  actuals = NULL
+  for (k in 1:k.fold) {
+    test.idx = which(s %% k.fold == (k-1) ) # use modular operator
+    train.set = dataset[-test.idx,]
+    test.set = dataset[test.idx,]
+    cat(k.fold,'-fold CV run',k,cl.name,':',
+        '#training:',nrow(train.set),
+        '#testing',nrow(test.set),'\n')
+    if(cl.name == "knn") {
+      prob = do.classification_variant(train.set, test.set, cl.name, K = K)
+    }
+    else {
+      prob = do.classification_variant(train.set, test.set, cl.name, gamma_in = gamma_in, cost_in = cost_in, kernel_in = kernel_in)
+    }
+    if(cl.name == "knn") {
+      predicted = prob
+    }
+    else{
+      predicted = as.numeric(prob > prob.cutoff)
+    }
+    actual = test.set$y
+    confusion.matrix = table(actual,factor(predicted,levels=c(0,1)))
+    confusion.matrix
+    error = (confusion.matrix[1,2]+confusion.matrix[2,1]) / nrow(test.set)  
+    errors[k] = error
+    cat('\t\terror=',error,'\n')
+    if(cl.name == "knn") {
+      prob_1 <- prob %>% as.numeric() - 1
+      prob_2 <- prob %>% attr("prob")
+      for (i in 1:length(prob_2)) {
+        if(prob_1[i] == 1) {
+          prob_2[i] <- prob_2[i]
+        }
+        else {
+          prob_2[i] <- 1 - prob_2[i]
+        }
+      }
+      prob <- prob_2
+    }
+    probs = c(probs,prob)
+    actuals = c(actuals,actual)
+    ## you may compute other measures and store them in arrays
+  }
+  avg.error = mean(errors)
+  cat(k.fold,'-fold CV results:','avg error=',avg.error,'\n')
+  
+  ## plot ROC
+  result = data.frame(probs,actuals)
+  pred = prediction(result$probs,result$actuals)
+  perf = performance(pred, "tpr","fpr")
+  
+  ### Return the perf and we will use this to plot the ROC curves on one plot.
+  return(perf)
+}
+```
+
+```{r}
+perf_lr <- k.fold.cv_p(data, "lr")
+perf_nb <- k.fold.cv_p(data, "nb")
+perf_dtree <- k.fold.cv_p(data, "dtree")
+perf_svm <- k.fold.cv_p(data, "svm", kernel_in = "linear")
+perf_ada <- k.fold.cv_p(data, "ada")
+
+### Here we reload the data and re-preprocess it.
+data <- read.csv("./hw03-data-pokemon.csv", header = TRUE)
+data <- preprocess(data, "knn")
+perf_knn <- k.fold.cv_p(data, "knn", K=10)
+
+### Then we draw all ROC curve on one plot.
+plot(perf_knn, col = "orange")
+plot(perf_lr, add = T, col = "red")
+plot(perf_nb, add = T, col = "green")
+plot(perf_dtree, add = T, col = "blue")
+plot(perf_svm, add = T, col = "black")
+plot(perf_ada, add = T, col = "purple")
+legend(0.7, 0.37, legend=c("lr", "knn-10", "nb", "dtree", "svm", "ada"),
+       col=c("red", "orange", "green", "blue", "black", "purple"), lty=1, cex=0.8)
+```
+
+
+# Problem 4. Summarize the model performance based on the table and the ROC plot in one or two paragraphs.
+
+YOUR ANSWER for Problem 4.
+
+-----------------------------
+
+We can see from the table and the plot that logistic regression model has the highest accuracy, then the best SVM model has the second highest accuracy. For precision, the best is also the logistic regression model, and the second best one is the KNN-10 model. For recall, the best is still the logistic regression model and the second best one is the Naive Bayes classifier. For F1, the best is the logistic regression model and the second best one is SVM model. For AUC, we can see from the table and the ROC curve plot that the best one is the SVM model, the second best is the logistic regression one.
+
+We can see that the logistic regression model performs the best in nearly all these performance measures except AUC. The best classifier judging by AUC is the SVM model. I think the logistic regression model is the best one among these classifiers because it has much higher accuracy and F1, which is a harmonic mean of precision and recall, values. Also its AUC is the second best, only a little bit smaller than the biggest AUC value among these models. However, if we only consider the AUC value, we can see from the ROC curve plot and the table that the SVM model is the best. Its ROC curve is closer to the upper left corner.
+
+-----------------------------
+

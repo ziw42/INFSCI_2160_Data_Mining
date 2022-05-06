@@ -1,0 +1,184 @@
+---
+title: "Homework 04"
+author: 'Lastname, Firstname (email: YOUR PITT EMAIL)'
+date: "today"
+output:
+  html_document:
+    code_folding: hide
+    theme: flatly
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+<style>
+    table {
+      border-collapse: collapse;
+    }
+      table, th, td, thead, tbody{
+        border: 1px solid black;
+    }
+    thead {
+        border-bottom: solid black;
+    }
+</style>
+
+# Overview
+> In this homework, you will work on two tasks using two different datasets. Using dimension reduction and clustering techniques, the task 1 is to group the US states by their the trend of monthly unemployment rate. The task 2 is to group the patterns of senators’ voting activities. </br>
+
+> You will use two datasets: </br>
+> (1) US unemployment rate data </br>
+> (2) Congress vote data
+
+> <b>Task1</b>: US unemployment rate analysis </br>
+> The objective of the analysis is to group US states together to see if they have similar trends of monthly unemployment rate using dimension reduction and clustering techniques.
+
+__Dataset__: US unemployment rate data </br>
+- The dataset is available from `hw04-unempstates.csv` </br>
+- The original source of the dataset: can found via the [author's website](https://www.biz.uiowa.edu/faculty/jledolter/DataMining/unempstates.csv) of the book called "Data Mining and Business Analytics with R" (p.201): Online access to the book is available via Pitt network </br>
+- The dataset includes the monthly unemployment rates of 50 states covering the period from January 1976 to August 2010 (over 416 months). Each unemployment rate of a month is derived by calculating the monthly average (of two observations each) for each state
+
+1-1. Use PCA to reduce the dimension of unemployment-rate information. </br>
+&emsp;&emsp;  a. Start by pre-processing the given data to perform PCA. Print the dimension of the processed data. </br>
+&emsp;&emsp;  (Hint: Make the states to be the unit (rows) of analysis, and standardize it for columns to be in the same scale, using `t` and `scale` function) </br>
+&emsp;&emsp;  b. Generate a screeplot. </br>
+&emsp;&emsp;  c. Determine the number of principle components based on this plot and briefly describe the rationale on your decision. </br>
+&emsp;&emsp;  d. Plot the loadings for the first principal components.
+  
+1-2. Generate a scatterplot to project the states on the first two principal components.
+
+1-3. Generate another scatterplot using MDS to plot states on those two principal components.
+
+1-4. Use k-means and hierarchical clustering to group the states.
+Specifically, based on the MDS plot from #3, you will generate 8 MDS maps to see how the states can be grouped in a different way depending on the use of different clustering techniques.
+Use the following combinations of four clustering methods and two number of clusters:
+    - Clustering method: k-means, h-clustering with single-link, h-clustering with complete-link, h- clustering with average-link
+    - Number of clusters: k = 4, k = 8 </br>
+
+&emsp;&emsp;  a. Generate a MDS map and color the states by their cluster. </br>
+&emsp;&emsp;  b. For each hierarchical clustering method (except for k-means), generate a dendrogram.
+  
+1-5. Based on your observation, choose two clustering results (from the 8 solutions) that are most meaningful and explain why.
+
+> <b>Task 2</b>: US Senator Roll Call analysis </br>
+> The objective is to identify and visualize the clustering patterns of senators’ voting activities.
+
+__Dataset__: US Senator Roll Call Data </br>
+- The dataset is available from `hw04-senator` folder </br>
+- The original source of the dataset can be found in [Voteview.com](https://legacy.voteview.com/senate101.htm) </br>
+- The dataset includes 13 files for Senate roll call votes for the 101st through 113th Congresses (as of March 2015). Each row corresponds to a voter in the US Senate. The first nine columns of the data frame include identification information for those voters, and the remaining columns are the actual votes. See the description of what is contained in each of the first nine columns in `hw04-unempstates-description.txt`
+
+2-1. Create a senator-by-senator distance matrix in their votes for the 113th Congress. Generate a MDS plot to project the senators on the two dimensional space. Use shapes or colors to differentiate the senators’ party affliation.
+
+2-2. Use k-means and hierarchical clustering to group the senators from the original data, and color the senators on the MDS plots based on the clustering results (you will use k-means, h-clustering with single-link, h-clustering with complete-link, h-clustering with average-link and k=2).
+
+2-3. For each clustering task in #2, compare the clustering result with the party labels and identify the party members who are assigned to a seemly wrong cluster. (e.g., based on the k-means results, which Republicans are clustered together with Democrats, and vice versa? And based on the three variants (single-link, complete-link and average-link), which Republicans are clustered together with Democrats, and vice versa?)
+
+2-4. Compute the purity and entropy for the clustering results with respect to the senators’ party labels. You will generate a 2x4 table as follows:
+
+Measure/Method | k-means      |  hclust-single    | hclust-complete  |
+-------------|--------------| ------------------|------------------|
+purity      |              |                   |                  |
+entropy     |              |                   |                  |
+
+2-5. Based on your observation on both measures and mis-classified members, choose two clustering methods that generate the most meaningful results and explain why.
+
+```{r document_setup, echo=F, message=F, warning=F}
+# load libraries
+library('foreign') ## for loading dta files using read.dta
+library('ggplot2')
+library(plyr) # for recoding data
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# Task 1
+### 1-1a.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 1a.
+
+### 1-1b.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 1b.
+
+### 1-1c.
+
+YOUR ANSWER for Problem 1c.
+
+### 1-1d.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 1d.
+
+### 1-2.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 2.
+
+### 1-3.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 3.
+
+### 1-4.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 4.
+
+### 1-5.
+
+YOUR ANSWER for Problem 5.
+
+# Task 2
+
+### 2-1.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 1.
+
+### 2-2.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 2.
+
+### 2-3.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 3.
+
+### 2-4.
+```{r}
+## YOUR CODE HERE
+```
+
+YOUR ANSWER for Problem 4.
+
+### 2-5.
+
+YOUR ANSWER for Problem 5.

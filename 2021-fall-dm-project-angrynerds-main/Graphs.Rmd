@@ -1,0 +1,71 @@
+---
+title: "Graphs"
+author: "Zian Wang"
+date: "2021/12/5"
+output: html_document
+---
+
+## Introduction
+
+This file is used to generate the graphs for analyzing the performances.
+
+## Code
+
+```{r setup, include=FALSE, warning=FALSE}
+### Include the libraries
+library("ggplot2")
+library("dplyr")
+
+### Read the analytic file.
+analytics <- readRDS("./analysis/ANALYTICS_FINAL.rds")
+```
+
+```{r, warning=FALSE}
+### Plot
+
+### --- Recall
+### --- Build the dataframe for plotting.
+summary <- summary(analytics)[c(2,5,8,11,14,17,20)] %>% as.data.frame() 
+summary <- summary %>% mutate(model = rownames(summary)) %>% mutate(model = gsub("_RECALL", "", model))
+summary %>% ggplot() +
+  geom_bar(mapping = aes(x = reorder(model, .), y = ., fill = model), stat = "identity") +
+  xlab("model") +
+  ylab("Recall") +
+  ggtitle("Recall of models") +
+  theme_bw()
+
+### Precision
+summary <- summary(analytics)[c(1,4,7,10,13,16,19)] %>% as.data.frame()
+summary <- summary %>% mutate(model = rownames(summary)) %>% mutate(model = gsub("_PRECISION", "", model))
+summary %>% ggplot() +
+  geom_bar(mapping = aes(x = reorder(model, .), y = ., fill = model), stat = "identity") +
+  xlab("model") +
+  ylab("Precision") +
+  ggtitle("Precision of models") +
+  theme_bw()
+
+### F-Score
+summary <- summary(analytics)[c(3,6,9,12,15,18,21)] %>% as.data.frame()
+summary <- summary %>% mutate(model = rownames(summary)) %>% mutate(model = gsub("_FSCORE", "", model))
+summary %>% ggplot() +
+  geom_bar(mapping = aes(x = reorder(model, .), y = ., fill = model), stat = "identity") +
+  xlab("model") +
+  ylab("F-Score") +
+  ggtitle("F-Score of models") +
+  theme_bw()
+
+### Covrage and recall plot.
+summary_2 <- analytics@ensemble_summary %>% as.data.frame()
+summary_2 <- summary_2 %>% mutate(n = rownames(summary_2))
+colnames(summary_2) <- c("coverage", "recall", "n")
+summary_3 <- as.data.frame(c(summary_2$coverage, summary_2$recall))
+colnames(summary_3) <- "value"
+summary_3$n <- c(summary_2$n, summary_2$n)
+summary_3$type <- c(rep("coverage", 7), rep("recall", 7))
+
+summary_3 %>% ggplot() +
+  geom_bar(mapping = aes(x = n, y = value, fill = type), stat = "identity", position = "dodge") +
+  theme_bw() +
+  scale_y_continuous(name = "coverage", 
+                     sec.axis = sec_axis(~./5+0.8, name = "recall"))
+```

@@ -1,0 +1,420 @@
+---
+title: "Homework 04"
+author: 'Wang, Zian (email: ziw42@pitt.edu)'
+date: "today"
+output:
+  html_document:
+    code_folding: hide
+    theme: flatly
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+<style>
+    table {
+      border-collapse: collapse;
+    }
+      table, th, td, thead, tbody{
+        border: 1px solid black;
+    }
+    thead {
+        border-bottom: solid black;
+    }
+</style>
+
+# Overview
+> In this homework, you will work on two tasks using two different datasets. Using dimension reduction and clustering techniques, the task 1 is to group the US states by their the trend of monthly unemployment rate. The task 2 is to group the patterns of senators’ voting activities. </br>
+
+> You will use two datasets: </br>
+> (1) US unemployment rate data </br>
+> (2) Congress vote data
+
+> <b>Task1</b>: US unemployment rate analysis </br>
+> The objective of the analysis is to group US states together to see if they have similar trends of monthly unemployment rate using dimension reduction and clustering techniques.
+
+__Dataset__: US unemployment rate data </br>
+- The dataset is available from `hw04-unempstates.csv` </br>
+- The original source of the dataset: can found via the [author's website](https://www.biz.uiowa.edu/faculty/jledolter/DataMining/unempstates.csv) of the book called "Data Mining and Business Analytics with R" (p.201): Online access to the book is available via Pitt network </br>
+- The dataset includes the monthly unemployment rates of 50 states covering the period from January 1976 to August 2010 (over 416 months). Each unemployment rate of a month is derived by calculating the monthly average (of two observations each) for each state
+
+1-1. Use PCA to reduce the dimension of unemployment-rate information. </br>
+&emsp;&emsp;  a. Start by pre-processing the given data to perform PCA. Print the dimension of the processed data. </br>
+&emsp;&emsp;  (Hint: Make the states to be the unit (rows) of analysis, and standardize it for columns to be in the same scale, using `t` and `scale` function) </br>
+&emsp;&emsp;  b. Generate a screeplot. </br>
+&emsp;&emsp;  c. Determine the number of principle components based on this plot and briefly describe the rationale on your decision. </br>
+&emsp;&emsp;  d. Plot the loadings for the first principal components.
+  
+1-2. Generate a scatterplot to project the states on the first two principal components.
+
+1-3. Generate another scatterplot using MDS to plot states on those two principal components.
+
+1-4. Use k-means and hierarchical clustering to group the states.
+Specifically, based on the MDS plot from #3, you will generate 8 MDS maps to see how the states can be grouped in a different way depending on the use of different clustering techniques.
+Use the following combinations of four clustering methods and two number of clusters:
+    - Clustering method: k-means, h-clustering with single-link, h-clustering with complete-link, h- clustering with average-link
+    - Number of clusters: k = 4, k = 8 </br>
+
+&emsp;&emsp;  a. Generate a MDS map and color the states by their cluster. </br>
+&emsp;&emsp;  b. For each hierarchical clustering method (except for k-means), generate a dendrogram.
+  
+1-5. Based on your observation, choose two clustering results (from the 8 solutions) that are most meaningful and explain why.
+
+> <b>Task 2</b>: US Senator Roll Call analysis </br>
+> The objective is to identify and visualize the clustering patterns of senators’ voting activities.
+
+__Dataset__: US Senator Roll Call Data </br>
+- The dataset is available from `hw04-senator` folder </br>
+- The original source of the dataset can be found in [Voteview.com](https://legacy.voteview.com/senate101.htm) </br>
+- The dataset includes 13 files for Senate roll call votes for the 101st through 113th Congresses (as of March 2015). Each row corresponds to a voter in the US Senate. The first nine columns of the data frame include identification information for those voters, and the remaining columns are the actual votes. See the description of what is contained in each of the first nine columns in `hw04-unempstates-description.txt`
+
+2-1. Create a senator-by-senator distance matrix in their votes for the 113th Congress. Generate a MDS plot to project the senators on the two dimensional space. Use shapes or colors to differentiate the senators’ party affliation.
+
+2-2. Use k-means and hierarchical clustering to group the senators from the original data, and color the senators on the MDS plots based on the clustering results (you will use k-means, h-clustering with single-link, h-clustering with complete-link, h-clustering with average-link and k=2).
+
+2-3. For each clustering task in #2, compare the clustering result with the party labels and identify the party members who are assigned to a seemly wrong cluster. (e.g., based on the k-means results, which Republicans are clustered together with Democrats, and vice versa? And based on the three variants (single-link, complete-link and average-link), which Republicans are clustered together with Democrats, and vice versa?)
+
+2-4. Compute the purity and entropy for the clustering results with respect to the senators’ party labels. You will generate a 2x4 table as follows:
+
+Measure/Method | k-means      |  hclust-single    | hclust-complete  |
+-------------|--------------| ------------------|------------------|
+purity      |              |                   |                  |
+entropy     |              |                   |                  |
+
+2-5. Based on your observation on both measures and mis-classified members, choose two clustering methods that generate the most meaningful results and explain why.
+
+```{r document_setup, echo=F, message=F, warning=F}
+# load libraries
+library('foreign') ## for loading dta files using read.dta
+library('ggplot2')
+library(plyr) # for recoding data
+library("stats")
+library("cluster") ## for h-clustring
+library("dplyr") ## for making the data frames
+library("knitr") ## for make the table in 2-4
+
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+
+)
+```
+
+# Task 1
+### 1-1a.
+```{r}
+### Read the data.
+data_1 <- read.csv("./hw04-unempstates.csv", header = TRUE)
+### Transpose the data, and standardize it.
+data_1 <- t(data_1)
+data_1 <- scale(data_1)
+### Print the dimension.
+cat("This dataset has", dim(data_1)[1], "rows and", dim(data_1)[2], "columns.")
+```
+
+YOUR ANSWER for Problem 1a.
+
+Here we use t() to transpose the data, and then use scale() to scale the data. After the pre-processing, we can see from the print that the dataset has 50 rows and 416 columns.
+
+### 1-1b.
+```{r}
+### Here we use prcomp to do PCA of unemployment data.
+pca_unemp <- prcomp(data_1)
+
+### Then we plot the screeplot.
+pca_unemp$sdev %>% as.data.frame() %>% mutate(. = .^2) %>% mutate(. = ./sum(.)) %>% mutate(seq = c(1:length(pca_unemp$sdev))) %>%
+  ggplot() +
+  geom_bar(mapping = aes(x = seq, y = .), stat = "identity", color = "navyblue", fill = "gold") +
+  xlab("PC") +
+  ylab("Propotion of variances explained") +
+  labs(title = "Screeplot")
+```
+
+YOUR ANSWER for Problem 1b.
+
+Here, we square the sdev object of the PCA result to see how much variances each PC explains. We use ggplot2 to make this plot, the x-axis is the index of the PC, and the y-axis is the proportion that the corresponding PC explains.
+
+### 1-1c.
+
+YOUR ANSWER for Problem 1c.
+
+From the screeplot we can see that the first three principle components explain 79.8% of the variances. If we add the fourth PC, they explain 84% of the variances. In my opinion, **we can choose the first three PCs** because they explain extremely nearly 80% of the variances, and adding the fourth PC is not worth the complexity we add.
+
+### 1-1d.
+```{r}
+### Here we plot the loading for the first PC.
+pca_unemp$rotation[, 1] %>% as.data.frame() %>% mutate(seq = c(1:length(pca_unemp$rotation[, 1]))) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = seq, y = .)) +
+  xlab("index") +
+  labs(title = "The loading for the first Priciple Component")
+```
+
+
+### 1-2.
+```{r}
+### Here we use predict to project data on loadings and use plot to plot the states.
+unemp_pc <- predict(pca_unemp)
+plot(unemp_pc[, 1:2], type = "n", main = "States on the first two principal components")
+text(x=unemp_pc[, 1], y=unemp_pc[, 2], labels=rownames(unemp_pc))
+```
+
+YOUR ANSWER for Problem 2.
+
+Here we use predict to project data on the first two loadings, and use plot() to make the plot. We can see that the x-axis is the first PC, the y-axis is the second PC.
+
+### 1-3.
+```{r}
+### Here we will use MDS to plot the states.
+### Because we still want to plot the states on the first two PC, here we use the default "euclidean distance".
+dist_unemp <- dist(data_1, method = "euclidean")
+mds_unemp <- cmdscale(dist_unemp)
+plot(mds_unemp, type = "n", main = "States on the MDS plot")
+text(mds_unemp, labels = rownames(data_1))
+```
+
+YOUR ANSWER for Problem 3.
+
+Here we use MDS to make the scatterplot. Because we still want to plot the states on the first two PCs, we will calculate the "euclidean distance" by using dist(method = "euclidean").
+
+
+### 1-4.
+```{r}
+## Here we use k-means and hierarchical clustering to group the states.
+
+### Set seed first.
+set.seed(123)
+
+### We will define two functions to do k-means and h-clustering, and plot the plots.
+kmean_plot <- function(centers) {
+  ### Do k-means
+  kmean_unemp <- kmeans(data_1, centers = centers)
+  ### Plot
+  plot(mds_unemp[, 1], mds_unemp[, 2], type="n", xlab="PC1", ylab="PC2", main = paste("k-means \t k =", centers))
+  text(x=mds_unemp[, 1], y=mds_unemp[, 2], labels=rownames(mds_unemp), col=kmean_unemp$cluster+1)
+}
+
+h_cluster_plot <- function(centers, method) {
+  ### Do h-clustering
+  h_cluster_unemp = agnes(data_1, diss=FALSE, metric="euclidian", method = method)
+  ### Plot
+  plot(mds_unemp[, 1], mds_unemp[, 2], type="n", xlab="PC1", ylab="PC2", main = paste("h-clustering with", method, "link \t k=", centers))
+  text(x=mds_unemp[, 1], y=mds_unemp[, 2], labels=rownames(mds_unemp), col=cutree(h_cluster_unemp,k=centers))
+  ### Plot the dendrogram
+  ### Here the dendrograms are the same for each h-clustering method no matter k equals to what.
+  ### Therefore, we only plot the dendroplot once for each method by using this if statement.
+  if(centers == 8) {
+    plot(h_cluster_unemp, which.plots = 2, main = paste("Dendrogram of h-clustering with", method, "link"))
+  }
+}
+
+### Then we use the two functions we defined to do clustering and plot.
+
+kmean_plot(4)
+kmean_plot(8)
+
+h_cluster_plot(4, "single")
+h_cluster_plot(8, "single")
+h_cluster_plot(4, "complete")
+h_cluster_plot(8, "complete")
+h_cluster_plot(4, "average")
+h_cluster_plot(8, "average")
+```
+
+YOUR ANSWER for Problem 4.
+
+Here we do k-means and h-clustering to cluster the states by defining our own functions, and then make 8 plots.
+
+### 1-5.
+
+YOUR ANSWER for Problem 5.
+
+In my opinion, the k-means when k=8 and h-clustering with complete link when k=4 are the most meaningful two results.
+
+First of all, If we want a result which has 8 clusters, I will choose k-means. This is because **1.** the clusters in it are all in proper size. There is no cluster contains too many or too little points. Also there is no obvious outliers. **2.** all clusters are far away from each other in the MDS plot. We may see there is some overlap between some clusters, this is because we are clustering the points in the original space, which has 416 features, but now we just plot the points into a two dimensional space. Therefore, there will be some overlap in this relatively low-dimensional space. But we can see in k-means when k=8, the overlap in MDS is relatively less. **3.** the points in each cluster are relatively tight together.
+
+Secondly, if we want a result which has 4 clusters, I will choose h-clusters with complete link. The reasons are the same: the clusters in it are not too big nor too small, and the clusters are far from each other and have less overlap between. and the points in each cluster are relatively tight together.
+
+# Task 2
+
+### 2-1.
+```{r}
+## Here we use MDS to project the senators on a two dimensional space.
+
+### Read the data.
+data_2 <- read.dta("./hw04-senator/sen113kh.dta")
+### Extract the data we will use.
+data_2 <- data_2[, c(2,6, 10:666)]
+sen_matrix <- matrix(data_2[1, c(-1, -2)], ncol = 657)
+for (t in 2:106) {
+  temp <- matrix(data_2[t, c(-1, -2)], nrow = 1)
+  sen_matrix <- rbind(sen_matrix, temp)
+}
+sen_matrix <- matrix(as.numeric(sen_matrix), nrow = 106)
+### Calculate other matrices in MDS.
+mult_sen <- sen_matrix %*% t(sen_matrix)
+dist_sen <- dist(mult_sen)
+mds_sen <- cmdscale(dist_sen)
+### Bind the "coordinates" and the "id" with the corresponding party.
+df_sen <- as.data.frame(cbind(cbind(mds_sen, data_2$party), data_2$id))
+
+### Plot MDS plot.
+ggplot(df_sen, mapping = aes(x = V1, y = V2, color = as.factor(V3))) +
+  geom_point() +
+  geom_text(aes(label = V4)) +
+  scale_color_manual(labels = c("Dem", "Repub", "Other"), values = c("blue", "red", "green")) +
+  guides(color=guide_legend("Party")) +
+  labs(title="Senators\n", x="X", y="Y")
+```
+
+YOUR ANSWER for Problem 1.
+
+Here we use MDS plot to project the senators on the two dimensional space. Red points are "Repub" senators and blue points are "Dem" senators. Here are two senators' party code is "328", which is not "Repub" nor "Dem", so we just classify them as "Other".
+
+### 2-2.
+```{r}
+## Here we will use clusters to group the senators. Then plot them on the MDS plots.
+
+### Set seed first
+set.seed(123)
+
+### K-means with k=2.
+kmean_sen <- kmeans(data_2[, c(-1, -2)], centers = 2)
+ggplot(df_sen, mapping = aes(x = V1, y = V2, color = as.factor(kmean_sen$cluster + 1))) +
+  geom_point() +
+  geom_text(aes(label = V4)) +
+  scale_color_manual(labels = c("group1", "group2"), values = c("green2", "plum1")) +
+  guides(color=guide_legend("Cluster")) +
+  labs(title="Senators \n k-means \n", x="X", y="Y")
+
+### Define a function to plot the MDS plots of h-clustering.
+h_cluster_plot_sen <- function(method) {
+  h_cluster_sen = agnes(data_2[, c(-1, -2)], diss=FALSE, metric="euclidian", method = method)
+  cut_tree <- cutree(h_cluster_sen, k = 2)
+  ggplot(df_sen, mapping = aes(x = V1, y = V2, color = as.factor(cut_tree))) +
+  geom_point() +
+  geom_text(aes(label = V4)) +
+  scale_color_manual(labels = c("group1", "group2"), values = c("green2", "plum1")) +
+  guides(color=guide_legend("Cluster")) +
+  labs(title=paste("Senators \n h-clustering with", method, "link \n"), x="X", y="Y")
+}
+
+### Three h-clustering methods, k=2.
+h_cluster_plot_sen("single")
+h_cluster_plot_sen("complete")
+h_cluster_plot_sen("average")
+```
+
+YOUR ANSWER for Problem 2.
+
+Here we use k-means, h-clustering with single, complete, and average link to cluster the data and plot it in MDS plots.
+
+### 2-3.
+```{r}
+## YOUR CODE HERE
+### Here we do not need code to compare the results.
+```
+
+YOUR ANSWER for Problem 3.
+
+Here is an important thing!!! We can find that in the original data, there are two senators whose party code is 328. Therefore, actually in the original data, we have three parties, but here we only set k=2, which means these 328 party senators will absolutely be seemly wrongly clustered. Therefore, we will ignore those 328 party senators, whose ID is 41300 and 29147, because when we do the cluster, we did not consider them.
+
+In k-means clustering, we can see from the plots we generated that senator 99911 is Dem, but are clustered into Repub. Senator 49703 and 41307 are clustered into Dem, but they are actually Repub.
+
+In h-clustering with single-link, we can see that all Repub senators are seemly wrongly clustered into Dem. Also, the senator 99911, who is Dem, is clustered as the only Repub senator here. This is pretty awful because actually the h-clustering with single-link completely mess them up. 
+
+In h-clustering with complete-link, we can see that its performance is similar to k-mean's. Senator 99911 is still seemly wrongly clustered as Repub. Senator 40300, 49703, and 41307 are clustered as Dem, but they are actually Repub.
+
+In h-clustering with average-link, the performance is the same as single-link's. It seemly wrongly clusters all Repub as Dem, and wrongly clusters the Dem senator 99911 as the only Repub senator here.
+
+The reason for these two poor performances here is 99911's vote is too far away from the main part. Senator 99911's vote is like a outlier in this dataset, it is so far away so the center of that group is pulled away. Therefore, h-clustering with single and average link will think 99911's vote is in a far and separate group.
+
+### 2-4.
+```{r}
+## Here we will define our own functions to calculate the purity and the entropy of all these clustring methods.
+
+### Set seed first
+set.seed(123)
+
+### Here we will build the h-clusters again because in the last question, we just made the plot, we did not return these results.
+### The reason we did not return these results and stored them in the last question is if we return them in those functions, the plots will not be plotted. Therefore, for plotting the plots, we will get these results here.
+h_cut_single <- agnes(data_2[, c(-1, -2)], diss=FALSE, metric="euclidian", method = "single") %>% cutree(k = 2)
+h_cut_complete <- agnes(data_2[, c(-1, -2)], diss=FALSE, metric="euclidian", method = "complete") %>% cutree(k = 2)
+h_cut_average <- agnes(data_2[, c(-1, -2)], diss=FALSE, metric="euclidian", method = "average") %>% cutree(k = 2)
+
+### Then we delete the 328 party senators in the data because we want to ignore them.
+kmean_result <- as.vector(kmean_sen$cluster)
+kmean_result <- kmean_result[-39]
+kmean_result <- kmean_result[-94]
+
+h_cut_single <- as.vector(h_cut_single)
+h_cut_single <- h_cut_single[-39]
+h_cut_single <- h_cut_single[-94]
+
+h_cut_complete <- as.vector(h_cut_complete)
+h_cut_complete <- h_cut_complete[-39]
+h_cut_complete <- h_cut_complete[-94]
+
+h_cut_average <- as.vector(h_cut_average)
+h_cut_average <- h_cut_average[-39]
+h_cut_average <- h_cut_average[-94]
+
+original_label <- as.vector(data_2$party)
+original_label <- original_label[-39]
+original_label <- original_label[-94]
+
+### Define the functions
+### Here the functions are the same as the code example in "Clustering evaluation" in class 07.
+cluster.purity <- function(clusters, classes) {
+  sum(apply(table(classes, clusters), 2, max)) / length(clusters)
+}
+
+cluster.entropy <- function(clusters,classes) {
+  en <- function(x) {
+    s = sum(x)
+    sum(sapply(x/s, function(p) {if (p) -p*log2(p) else 0} ) )
+  }
+  M = table(classes, clusters)
+  m = apply(M, 2, en)
+  c = colSums(M) / sum(M)
+  sum(m*c)
+}
+
+### Here we calculate the purity and entropy of all these methods, and store them into two data frames.
+result_1 <- data.frame(cluster.purity(kmean_result, original_label), cluster.purity(h_cut_single, original_label), cluster.purity(h_cut_complete, original_label), cluster.purity(h_cut_average, original_label))
+
+result_2 <- data.frame(cluster.entropy(kmean_result, original_label), cluster.entropy(h_cut_single, original_label), cluster.entropy(h_cut_complete, original_label), cluster.entropy(h_cut_average, original_label))
+
+### Combine the two results into one, and assign the column and row names.
+colnames(result_1) <- c("k-means", "hclust-single", "hclust-complete", "hclust-average")
+colnames(result_2) <- c("k-means", "hclust-single", "hclust-complete", "hclust-average")
+result <- rbind(result_1, result_2)
+rownames(result) <- (c("purity", "entropy"))
+
+### Use kable to build a table for outputing the answer.
+kable(result)
+```
+
+YOUR ANSWER for Problem 4.
+
+--------------------------------------------
+
+Here we define two functions to calculate purity and entropy, then store the answers into dataframes, and output them by a table.
+
+One thing need to be noticed is that here we also ignore the 328 party senators.
+
+--------------------------------------------
+
+### 2-5.
+
+YOUR ANSWER for Problem 5.
+
+In my opinion, I will choose k-means and the h-clustering with complete link.
+
+Firstly, we can see from the mis-classified senators that these two chosen clustering methods make a relatively good answer. K-means only mis-classified three senators, and h-clustering with complete link mis-classified four senators. However, we can see that the rest two methods classifired all Repub senators as Dem, and classified 99911, a Dem senator, as Repub.
+
+Then we see from the measures. K-means and h-clustering with complete link have higher purity, which means in clusters of these two methods, the classes of the points are purer. In other words, in each cluster of these methods, there are nearly all Dem or Repub senators, only very little different party's senators exist. Also, the entropy of k-means and h-clustering with complete link is lower than the rest methods, which means the clusters in the chosen methods are less disorder. Therefore, the k-means and h-clustering with complete link's clusters are purer and less disorder, we choose these two methods.

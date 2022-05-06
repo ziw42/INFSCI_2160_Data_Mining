@@ -1,0 +1,28 @@
+The format of the roll call files is:
+
+Variables (by the index):
+ 1. Congress Number
+ 2. ICPSR ID Number:  5 digit code assigned by the ICPSR as 
+                       corrected by Howard Rosenthal and myself.
+ 3. State Code:  2 digit ICPSR State Code. 
+ 4. Congressional District Number (0 if Senate)
+ 5. State Name
+ 6. Party Code:  100 = Dem., 200 = Repub. (See PARTY3.DAT)
+ 7. Occupancy:  ICPSR Occupancy Code -- 0=only occupant; 1=1st occupant; 2=2nd occupant; etc.
+ 8. Last Means of Attaining Office:  ICPSR Attain-Office Code -- 	
+	1=general election;
+	2=special election; 
+	3=elected by state legislature; 
+	5=appointed
+ 9. Name
+10 - to the number of roll calls + 10:  Roll Call Data --
+	0=not a member, 
+	1=Yea, 
+	2=Paired Yea, 
+	3=Announced Yea,
+	4=Announced Nay, 
+	5=Paired Nay, 
+	6=Nay,
+	7=Present (some Congresses, also not used some Congresses),
+	8=Present (some Congresses, also not used some Congresses),
+	9=Not Voting }

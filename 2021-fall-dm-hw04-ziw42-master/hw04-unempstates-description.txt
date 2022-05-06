@@ -1,0 +1,6 @@
+This dataset collects monthly seasonally adjusted unemployment rates:
+
+- Period: January 1976 ~ August 2010
+- Variables: 50 US states (n=50). 
+- Observations: Months in the period (n=416)
+- Values: Calculate the 416 monthly averages (of two observations each) for each state

@@ -1,0 +1,192 @@
+---
+title: "TextPreprocessing"
+author: "sog26"
+date: "28/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+  BiocManager::install("Biobase", version = "3.14")
+install.packages('lsa')
+install.packages('NMF')
+install.packages('scatterplot3d')
+```
+```{r}
+install.packages("tm")
+```
+
+
+
+
+```{r}
+library(RTextTools)
+library(tm)
+library(lsa)
+library(ggplot2)
+library(RecordLinkage)
+```
+
+```{r}
+a <- c(1,2)
+a <- c(a, 3)
+a <- c(a,4)
+a
+```
+
+
+```{r}
+Sys.setlocale(category = "LC_ALL", locale = "us")
+readFile <- function(filename) {
+  text <- c()
+  con <- file(filename, "r")
+  line = readLines(con, n=1)
+  while(length(line) != 0) {
+    line <- iconv(enc2utf8(line),sub="byte")
+    line <- gsub("\\t", "", line)
+    line <- gsub("\\n", "", line)
+    if(nchar(line) >= 120 && nchar(line) <= 500) {
+      text <- c(text, line)
+    }
+    line <- readLines(con, n=1)
+  }
+  return(text)
+}
+
+#text <- readFile("./data/Albuquerque+police+contract.txt")
+text <- c()
+for(i in list.files("./data")) {
+ text <- c(text, readFile(paste("./data/", i, sep = "")))
+}
+```
+
+```{r}
+saveRDS(text, "text.rds")
+```
+
+
+```{r}
+length(text)
+```
+
+```{r}
+a <- read.csv("./data.csv", header = T)
+a <- a[c("language", "category")]
+```
+
+
+```{r}
+label <- rep("Not problematic", length(text))
+```
+
+```{r}
+language <- a$language
+category <- a$category
+```
+
+```{r}
+length(category)
+```
+
+```{r}
+table(category)
+```
+
+
+```{r}
+library(stringdist)
+```
+
+
+```{r}
+for (i in seq_along(text)) {
+  maximum <- 0
+  for (j in seq_along(language)) {
+    similar <- stringsim(text[i], language[j], method='jw', p=0.1)
+    if (similar > 0.852){
+      if (similar > maximum) {
+        maximum <- similar
+        label[i] <- category[j]
+      }
+    }
+}
+}
+```
+
+
+```{r}
+table(label)
+```
+
+```{r}
+saveRDS(label, "label.rds")
+```
+
+
+```{r}
+table(label)
+```
+
+```{r}
+label[901]
+```
+
+```{r}
+corpus = Corpus(VectorSource(text))
+corpus = tm_map(corpus, tolower) ## convert text to lower case
+inspect(corpus[1:3])  
+```
+
+```{r}
+corpus = tm_map(corpus, removePunctuation) ## remove punctuations
+inspect(corpus[1:3])
+```
+
+```{r}
+corpus = tm_map(corpus, removeNumbers) ## remove numbers
+inspect(corpus[1:3])
+```
+
+```{r}
+corpus = tm_map(corpus, function(x) removeWords(x, stopwords("english"))) ## remove stopwords
+inspect(corpus[1:3])
+```
+
+```{r}
+corpus = tm_map(corpus, stemDocument, language = "english") ## stemming
+inspect(corpus[1:3])
+```
+
+```{r}
+td.mat = as.matrix(TermDocumentMatrix(corpus))
+td.mat[1:10,1:10]
+dim(td.mat)
+```
+
+```{r}
+length(text)
+```
+
+```{r}
+doc_matrix <- create_matrix(text, language="english", removeNumbers=TRUE,
+                            stemWords=TRUE, removeSparseTerms=0.998)
+```
+
+```{r}
+dim(doc_matrix)
+```
+```{r}
+doc_matrix[1:10, 1:10]
+```
+
